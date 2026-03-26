@@ -100,6 +100,9 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .tag-inari{background:#fce4ec;color:#880e4f}
 .tag-angle{background:#e3f2fd;color:#1565c0}
 .shrine-note{font-size:10px;color:var(--muted);margin-top:2px;font-style:italic}
+.wiki-toggle{font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px;font-family:var(--sans);text-decoration:underline;display:block}
+.wiki-excerpt{font-size:11px;color:#555;line-height:1.7;margin-top:6px;padding:8px 10px;background:#fffbf3;border-left:2px solid var(--gold);border-radius:0 3px 3px 0;display:none}
+.wiki-excerpt a{color:var(--gold);font-size:10px;}
 
 /* 手帳ボタン */
 .card-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
@@ -765,6 +768,42 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
 // =====================================================
 var currentSearchResults=null,currentEhoDeg=165,currentAngleWidth=10;
 
+// =====================================================
+// Wikipedia概要取得
+// =====================================================
+var wikiCache={};
+async function fetchWikiExcerpt(name){
+  if(wikiCache[name]!==undefined)return wikiCache[name];
+  try{
+    // まず名前で直接検索
+    var url='https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=3&titles='+encodeURIComponent(name)+'&format=json&origin=*&redirects=1';
+    var res=await fetch(url);
+    var data=await res.json();
+    var pages=data.query.pages;
+    var page=Object.values(pages)[0];
+    if(page&&page.extract&&!page.missing){
+      var text=page.extract.replace(/\n+/g,' ').trim();
+      if(text.length>20){wikiCache[name]={text:text,title:page.title};return wikiCache[name];}
+    }
+    // 見つからなければサーチAPIで試す
+    var surl='https://ja.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(name)+'&format=json&origin=*&srlimit=1&srnamespace=0';
+    var sres=await fetch(surl);
+    var sdata=await sres.json();
+    var hits=sdata.query.search;
+    if(!hits||!hits.length){wikiCache[name]=null;return null;}
+    var stitle=hits[0].title;
+    var url2='https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=3&titles='+encodeURIComponent(stitle)+'&format=json&origin=*&redirects=1';
+    var res2=await fetch(url2);
+    var data2=await res2.json();
+    var page2=Object.values(data2.query.pages)[0];
+    if(page2&&page2.extract){
+      var text2=page2.extract.replace(/\n+/g,' ').trim();
+      wikiCache[name]={text:text2,title:page2.title};return wikiCache[name];
+    }
+    wikiCache[name]=null;return null;
+  }catch(e){wikiCache[name]=null;return null;}
+}
+
 function renderSearchResults(filtered,ehoDeg,angleWidth){
   currentSearchResults=filtered;currentEhoDeg=ehoDeg;currentAngleWidth=angleWidth;
   var list=document.getElementById('shrineList');list.innerHTML='';
@@ -798,6 +837,8 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +    inariTag
       +  '</div>'
       +  noteHtml
+      +  '<button class="wiki-toggle" id="wiki-btn-'+i+'">📖 概要を見る ▼</button>'
+      +  '<div class="wiki-excerpt" id="wiki-box-'+i+'"></div>'
       +'</div>'
       +'<div class="card-actions">'
       +(achieved
@@ -807,6 +848,30 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
         ?'<button class="btn-save saved" onclick="void(0)">🔖 保存済</button>'
         :(!achieved?'<button class="btn-save" onclick="saveShrine(\''+p.id+'\')">🔖 行きたい</button>':''))
       +'</div>';
+
+    // Wikipedia概要トグル
+    (function(idx,pname){
+      var btn=card.querySelector('#wiki-btn-'+idx);
+      var box=card.querySelector('#wiki-box-'+idx);
+      var loaded=false,open=false;
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();
+        open=!open;
+        box.style.display=open?'block':'none';
+        if(open&&!loaded){
+          loaded=true;
+          box.innerHTML='<span style="color:#aaa;font-size:10px">読み込み中...</span>';
+          fetchWikiExcerpt(pname).then(function(result){
+            if(result){
+              box.innerHTML=result.text.substring(0,200)+(result.text.length>200?'…':'')+' <a href="https://ja.wikipedia.org/wiki/'+encodeURIComponent(result.title)+'" target="_blank">Wikipedia →</a>';
+            }else{
+              box.innerHTML='<span style="color:#aaa;font-size:10px">Wikipediaに情報がありません</span>';
+            }
+          });
+        }
+        btn.textContent=open?'📖 概要を閉じる ▲':'📖 概要を見る ▼';
+      });
+    })(i,p.name);
 
     card.querySelector('.shrine-body').style.cursor='pointer';
     card.querySelector('.shrine-body').addEventListener('click',function(){
