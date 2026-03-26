@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>恵方参り — 神社・お寺を探す</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600;900&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+:root {
+  --ink:#1a1208; --paper:#f5f0e8; --paper2:#ede6d6;
+  --gold:#c8922a; --gold2:#e8b84b; --red:#8b2222;
+  --muted:#7a6e5f; --border:#d4c9b0; --green:#2e7d32;
+  --serif:'Noto Serif JP',serif; --sans:'Noto Sans JP',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:720px;margin:0 auto;padding:40px 20px 80px}
+
+/* タブナビ */
+.tab-nav{display:flex;gap:0;margin-bottom:28px;border-bottom:2px solid var(--border)}
+.tab-btn{flex:1;padding:12px;background:none;border:none;font-family:var(--serif);font-size:14px;letter-spacing:2px;color:var(--muted);cursor:pointer;transition:all 0.2s;position:relative;display:flex;align-items:center;justify-content:center;gap:6px}
+.tab-btn.active{color:var(--gold);font-weight:600}
+.tab-btn.active::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--gold)}
+.tab-btn .badge{background:var(--red);color:white;font-size:9px;border-radius:10px;padding:1px 6px;font-family:var(--sans);font-weight:500}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* ヘッダー */
+.header{text-align:center;margin-bottom:28px}
+.header-year{font-size:11px;letter-spacing:6px;color:var(--gold);font-weight:500;margin-bottom:8px}
+.header h1{font-family:var(--serif);font-size:30px;font-weight:900;letter-spacing:8px;margin-bottom:5px}
+.header-sub{font-size:12px;color:var(--muted);letter-spacing:2px}
+.divider{display:flex;align-items:center;gap:12px;margin:12px 0;color:var(--gold)}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+
+/* 恵方カード */
+.eho-card{background:var(--ink);color:var(--paper);border-radius:4px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;gap:18px;position:relative;overflow:hidden}
+.eho-card::before{content:attr(data-kan);position:absolute;right:-8px;top:-16px;font-family:var(--serif);font-size:100px;color:rgba(200,146,42,0.08);pointer-events:none;line-height:1}
+.eho-compass{width:60px;height:60px;flex-shrink:0}
+.eho-info{flex:1}
+.eho-info .eho-kan{font-size:10px;color:rgba(245,240,232,0.5);letter-spacing:1px;margin-bottom:2px}
+.eho-info h2{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--gold2);letter-spacing:3px;margin-bottom:1px}
+.eho-info .eho-desc{font-size:10px;color:rgba(245,240,232,0.6);letter-spacing:1px}
+.eho-deg{text-align:right;flex-shrink:0}
+.eho-deg .num{font-family:var(--serif);font-size:32px;font-weight:300;color:var(--gold2);line-height:1}
+.eho-deg .unit{font-size:9px;color:rgba(245,240,232,0.5);letter-spacing:2px}
+
+/* フォーム */
+.form-section{background:white;border:1px solid var(--border);border-radius:4px;padding:18px 20px;margin-bottom:14px}
+.form-label{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:2px;margin-bottom:5px;display:block}
+.form-input{width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:3px;font-size:13px;font-family:var(--sans);color:var(--ink);background:var(--paper);outline:none;transition:border-color 0.2s}
+.form-input:focus{border-color:var(--gold)}
+.form-select{width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:3px;font-size:12px;font-family:var(--sans);color:var(--ink);background:var(--paper);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%237a6e5f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.range-header{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
+.range-val{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--gold)}
+input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
+.filter-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.filter-chip{padding:4px 11px;border:1px solid var(--border);border-radius:20px;font-size:11px;color:var(--muted);cursor:pointer;transition:all 0.2s;user-select:none}
+.filter-chip.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.ryuha-note{margin-top:8px;padding:8px 12px;background:var(--paper2);border-left:3px solid var(--gold);font-size:10px;color:var(--muted);line-height:1.8}
+
+.btn-search{width:100%;padding:13px;background:var(--ink);color:var(--paper);border:none;border-radius:4px;font-family:var(--serif);font-size:14px;letter-spacing:4px;cursor:pointer;transition:background 0.2s}
+.btn-search:hover{background:var(--red)}
+.btn-search:disabled{background:var(--muted);cursor:not-allowed}
+
+.loading{display:none;text-align:center;padding:28px;color:var(--muted);font-size:12px;letter-spacing:2px}
+.loading.show{display:block}
+.torii-spin{display:inline-block;font-size:26px;animation:spin 1.5s linear infinite;margin-bottom:7px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+.results{display:none;margin-top:20px}.results.show{display:block}
+.results-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.results-title{font-family:var(--serif);font-size:14px;letter-spacing:2px}
+.results-count{font-size:10px;color:var(--muted)}
+
+#map{width:100%;height:340px;border:1px solid var(--border);border-radius:4px 4px 0 0;z-index:1}
+.map-legend-bar{display:flex;gap:10px;padding:7px 11px;background:white;border:1px solid var(--border);border-top:none;border-radius:0 0 4px 4px;margin-bottom:14px;font-size:10px;color:var(--muted);flex-wrap:wrap;align-items:center}
+.leg{display:flex;align-items:center;gap:4px}
+.leg-dot{width:9px;height:9px;border-radius:50%}
+
+/* 神社カード */
+.shrine-list{display:flex;flex-direction:column;gap:9px}
+.shrine-card{background:white;border:1px solid var(--border);border-radius:4px;padding:13px 15px;display:flex;gap:10px;align-items:flex-start;transition:border-color 0.2s,box-shadow 0.2s;position:relative}
+.shrine-card:hover{border-color:var(--gold);box-shadow:0 2px 10px rgba(200,146,42,0.1)}
+.shrine-card.highlighted{border-color:var(--gold);background:#fffbf3}
+.shrine-card.saved{border-left:3px solid var(--gold)}
+.shrine-card.achieved{border-left:3px solid var(--green)}
+.shrine-num{width:24px;height:24px;background:var(--paper2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:10px;font-weight:600;color:var(--gold);flex-shrink:0}
+.shrine-icon{font-size:18px;flex-shrink:0}
+.shrine-body{flex:1;min-width:0}
+.shrine-name{font-family:var(--serif);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:2px}
+.shrine-addr{font-size:10px;color:var(--muted);margin-bottom:3px}
+.shrine-meta{display:flex;gap:4px;flex-wrap:wrap}
+.shrine-tag{font-size:9px;padding:2px 6px;border-radius:2px}
+.tag-dist{background:var(--paper2);color:var(--muted)}
+.tag-shrine{background:#fff3e0;color:#e65100}
+.tag-temple{background:#e8f5e9;color:#2e7d32}
+.tag-inari{background:#fce4ec;color:#880e4f}
+.tag-angle{background:#e3f2fd;color:#1565c0}
+.shrine-note{font-size:10px;color:var(--muted);margin-top:2px;font-style:italic}
+
+/* 手帳ボタン */
+.card-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+.btn-save{padding:5px 8px;font-size:9px;border:1px solid var(--border);border-radius:3px;background:white;cursor:pointer;color:var(--muted);font-family:var(--sans);transition:all 0.2s;white-space:nowrap}
+.btn-save:hover{border-color:var(--gold);color:var(--gold)}
+.btn-save.saved{background:var(--gold);color:white;border-color:var(--gold)}
+.btn-achieve{padding:5px 8px;font-size:9px;border:1px solid #2e7d32;border-radius:3px;background:white;cursor:pointer;color:#2e7d32;font-family:var(--sans);transition:all 0.2s;white-space:nowrap}
+.btn-achieve:hover{background:#e8f5e9}
+.btn-achieve.achieved{background:#2e7d32;color:white}
+
+.notice{margin-top:14px;padding:11px 13px;background:var(--paper2);border-left:3px solid var(--gold);font-size:10px;color:var(--muted);line-height:2}
+
+/* ===== マイ手帳 ===== */
+.techou-header{text-align:center;margin-bottom:24px}
+.techou-header h2{font-family:var(--serif);font-size:22px;font-weight:900;letter-spacing:6px;margin-bottom:4px}
+.techou-header p{font-size:11px;color:var(--muted);letter-spacing:1px}
+
+.techou-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px}
+.stat-card{background:white;border:1px solid var(--border);border-radius:4px;padding:14px;text-align:center}
+.stat-num{font-family:var(--serif);font-size:28px;font-weight:600;color:var(--gold);line-height:1}
+.stat-label{font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:3px}
+
+.techou-filter{display:flex;gap:6px;margin-bottom:14px}
+.tf-btn{padding:5px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;color:var(--muted);cursor:pointer;background:white;font-family:var(--sans);transition:all 0.2s}
+.tf-btn.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.techou-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.techou-empty .icon{font-size:40px;margin-bottom:12px}
+.techou-empty p{font-size:12px;line-height:2}
+
+/* 手帳カード */
+.techou-card{background:white;border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:10px}
+.techou-card.achieved-card{border-left:4px solid var(--green)}
+.techou-card.saved-card{border-left:4px solid var(--gold)}
+.techou-card-header{padding:14px 16px;display:flex;gap:12px;align-items:flex-start}
+.techou-stamp{width:52px;height:52px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;position:relative}
+.techou-stamp.done{background:radial-gradient(circle,#e8f5e9,#c8e6c9);border:2px solid #2e7d32}
+.techou-stamp.pending{background:var(--paper2);border:2px dashed var(--border)}
+.techou-stamp .stamp-check{position:absolute;bottom:-2px;right:-2px;background:#2e7d32;color:white;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold}
+.techou-info{flex:1}
+.techou-name{font-family:var(--serif);font-size:14px;font-weight:600;letter-spacing:1px;margin-bottom:2px}
+.techou-addr{font-size:10px;color:var(--muted);margin-bottom:4px}
+.techou-tags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
+.techou-date{font-size:10px;color:var(--green);font-weight:500}
+.techou-pending-label{font-size:10px;color:var(--gold)}
+.techou-card-body{border-top:1px solid var(--border2,#f0ece4)}
+.techou-memo{padding:10px 16px;font-size:11px;color:var(--muted);background:var(--paper2);line-height:1.7}
+.techou-photos{display:flex;gap:6px;padding:10px 16px;flex-wrap:wrap}
+.techou-photo{width:72px;height:72px;object-fit:cover;border-radius:3px;border:1px solid var(--border);cursor:pointer}
+.techou-photo-add{width:72px;height:72px;border:2px dashed var(--border);border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:10px;gap:2px;transition:border-color 0.2s}
+.techou-photo-add:hover{border-color:var(--gold);color:var(--gold)}
+.techou-actions{padding:8px 16px;display:flex;gap:6px;border-top:1px solid var(--border2,#f0ece4)}
+.techou-btn{padding:5px 10px;font-size:10px;border:1px solid var(--border);border-radius:3px;background:white;cursor:pointer;color:var(--muted);font-family:var(--sans);transition:all 0.2s}
+.techou-btn:hover{border-color:var(--gold);color:var(--gold)}
+.techou-btn.danger:hover{border-color:var(--red);color:var(--red)}
+.techou-btn.primary{background:var(--green);color:white;border-color:var(--green)}
+.techou-btn.primary:hover{background:#1b5e20}
+
+/* モーダル */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal.show{display:flex}
+.modal-box{background:white;border-radius:6px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.2)}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.modal-header h3{font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:1px}
+.modal-close{background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;line-height:1}
+.modal-body{padding:20px}
+.modal-label{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:1px;margin-bottom:5px;display:block;margin-top:14px}
+.modal-label:first-child{margin-top:0}
+.modal-input{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:3px;font-size:13px;font-family:var(--sans);outline:none;transition:border-color 0.2s}
+.modal-input:focus{border-color:var(--gold)}
+.modal-textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:3px;font-size:12px;font-family:var(--sans);outline:none;resize:vertical;min-height:80px;transition:border-color 0.2s}
+.modal-textarea:focus{border-color:var(--gold)}
+.stamp-preview{text-align:center;padding:20px;background:var(--paper2);border-radius:4px;margin:10px 0}
+.stamp-big{font-size:56px;display:block;margin-bottom:8px}
+.stamp-date{font-size:12px;color:var(--green);font-weight:500}
+.photo-upload-area{border:2px dashed var(--border);border-radius:4px;padding:20px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-top:10px}
+.photo-upload-area:hover{border-color:var(--gold)}
+.photo-preview-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.photo-preview-item{position:relative}
+.photo-preview-item img{width:64px;height:64px;object-fit:cover;border-radius:3px}
+.photo-preview-item .remove-photo{position:absolute;top:-4px;right:-4px;background:var(--red);color:white;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;cursor:pointer}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.btn-primary{padding:9px 20px;background:var(--ink);color:white;border:none;border-radius:3px;font-family:var(--serif);font-size:13px;letter-spacing:1px;cursor:pointer;transition:background 0.2s}
+.btn-primary:hover{background:var(--red)}
+.btn-secondary{padding:9px 16px;background:white;color:var(--muted);border:1px solid var(--border);border-radius:3px;font-size:12px;font-family:var(--sans);cursor:pointer}
+
+.mk-origin{background:#c8922a;color:white;border:2px solid white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.mk-shrine{background:#e65100;color:white;border:2px solid white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.25);cursor:pointer}
+.mk-temple{background:#2e7d32;color:white;border:2px solid white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.25);cursor:pointer}
+.mk-inari{background:#aaa;color:white;border:2px solid white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.2);cursor:pointer}
+.mk-achieved{background:#f9a825;color:white;border:2px solid white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
+
+.footer{text-align:center;margin-top:36px;font-size:10px;color:var(--border);letter-spacing:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- タブナビ -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('search')">⛩ 恵方検索</button>
+    <button class="tab-btn" id="techou-tab" onclick="switchTab('techou')">📖 マイ手帳 <span class="badge" id="techou-badge" style="display:none">0</span></button>
+  </div>
+
+  <!-- ===== 検索タブ ===== -->
+  <div class="tab-pane active" id="tab-search">
+    <div class="header">
+      <div class="header-year" id="headerYear">令和八年 · 2026</div>
+      <h1>恵方参り</h1>
+      <div class="header-sub">今年の方角の神社・お寺を探す</div>
+      <div class="divider">⛩</div>
+    </div>
+
+    <div class="eho-card" id="ehoCard" data-kan="丙">
+      <div class="eho-compass">
+        <svg id="compassSvg" viewBox="0 0 60 60" fill="none" width="60" height="60">
+          <circle cx="30" cy="30" r="28" stroke="rgba(200,146,42,0.3)" stroke-width="1"/>
+          <circle cx="30" cy="30" r="22" stroke="rgba(200,146,42,0.15)" stroke-width="1"/>
+          <text x="30" y="8" text-anchor="middle" fill="rgba(245,240,232,0.4)" font-size="6" font-family="serif">北</text>
+          <text x="30" y="57" text-anchor="middle" fill="rgba(245,240,232,0.4)" font-size="6" font-family="serif">南</text>
+          <text x="4" y="33" text-anchor="middle" fill="rgba(245,240,232,0.4)" font-size="6" font-family="serif">西</text>
+          <text x="56" y="33" text-anchor="middle" fill="rgba(245,240,232,0.4)" font-size="6" font-family="serif">東</text>
+          <line id="compassNeedle" x1="30" y1="30" x2="36" y2="51" stroke="#e8b84b" stroke-width="2.5" stroke-linecap="round"/>
+          <polygon id="compassArrow" points="36,51 33,44 39,44" fill="#e8b84b"/>
+          <circle cx="30" cy="30" r="3" fill="#e8b84b"/>
+        </svg>
+      </div>
+      <div class="eho-info">
+        <div class="eho-kan" id="ehoKan">十干「丙（ひのえ）」の年</div>
+        <h2 id="ehoDir">南南東微南</h2>
+        <div class="eho-desc" id="ehoDesc">火の気・巳午の間</div>
+      </div>
+      <div class="eho-deg">
+        <div class="num" id="ehoDeg">165</div>
+        <div class="unit">DEGREES</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-row">
+        <div>
+          <label class="form-label">年を選ぶ</label>
+          <select class="form-select" id="yearSelect" onchange="onYearChange()"></select>
+        </div>
+        <div>
+          <label class="form-label">流派・方位系</label>
+          <select class="form-select" id="ryuhaSelect" onchange="onRyuhaChange()">
+            <option value="16">一般（16方位）157.5°</option>
+            <option value="24" selected>本来（24方位）165° ← あちこち方位</option>
+            <option value="fusui">風水24山（厳密）</option>
+          </select>
+        </div>
+      </div>
+      <div class="ryuha-note" id="ryuhaNote">📐 <b>本来の24方位</b>：陰陽道「二十四山」に基づく正確な方角。あちこち方位と同じ基準。</div>
+      <div style="margin-top:12px">
+        <label class="form-label">出発地の住所</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="address" placeholder="例：埼玉県三郷市早稲田7丁目" value="埼玉県三郷市早稲田7丁目" style="flex:1">
+          <button onclick="setCurrentLocation()" id="gpsBtn" style="padding:0 14px;border:1px solid var(--border);border-radius:3px;background:white;cursor:pointer;font-size:18px;flex-shrink:0;" title="現在地をセット">📍</button>
+        </div>
+        <div id="gpsStatus" style="font-size:10px;color:var(--muted);margin-top:4px;min-height:14px"></div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="form-label">検索距離</label>
+          <div class="range-header"><span style="font-size:10px;color:var(--muted)">範囲</span><span class="range-val" id="distVal">30km</span></div>
+          <input type="range" id="distRange" min="5" max="100" step="5" value="30">
+        </div>
+        <div>
+          <label class="form-label">方角の幅（許容誤差）</label>
+          <div class="range-header"><span style="font-size:10px;color:var(--muted)">±</span><span class="range-val" id="widthVal">±10°</span></div>
+          <input type="range" id="widthRange" min="2" max="30" step="2" value="10">
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label class="form-label">フィルター</label>
+        <div class="filter-row">
+          <div class="filter-chip active" id="chip-shrine" onclick="toggleChip('chip-shrine','shrine')">⛩ 神社</div>
+          <div class="filter-chip active" id="chip-temple" onclick="toggleChip('chip-temple','temple')">🏯 お寺</div>
+          <div class="filter-chip" id="chip-inari" onclick="toggleChip('chip-inari','inari')">🦊 稲荷を含む</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-search" id="searchBtn" onclick="doSearch()">⛩ 恵方の神社・お寺を探す</button>
+
+    <div class="loading" id="loading">
+      <div class="torii-spin">⛩</div>
+      <p id="loadingMsg">住所を確認中...</p>
+    </div>
+
+    <div class="results" id="results">
+      <div class="results-header">
+        <div class="results-title">検索結果</div>
+        <div class="results-count" id="resultsCount"></div>
+      </div>
+      <div id="map"></div>
+      <div class="map-legend-bar">
+        <div class="leg"><div class="leg-dot" style="background:#c8922a"></div>出発地</div>
+        <div class="leg"><div class="leg-dot" style="background:#e65100"></div>神社</div>
+        <div class="leg"><div class="leg-dot" style="background:#2e7d32"></div>お寺</div>
+        <div class="leg"><div class="leg-dot" style="background:#f9a825;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div>参拝済★</div>
+        <div style="margin-left:auto;font-size:9px;color:var(--muted)">マーカー→Googleマップ</div>
+      </div>
+      <div class="shrine-list" id="shrineList"></div>
+      <div class="notice">※ OpenStreetMapのデータを使用しています。稲荷神社の除外は名称による自動判定のため漏れが生じる場合があります。</div>
+    </div>
+  </div>
+
+  <!-- ===== マイ手帳タブ ===== -->
+  <div class="tab-pane" id="tab-techou">
+    <div class="techou-header">
+      <h2>マイ手帳</h2>
+      <p>恵方参りの記録を残そう</p>
+    </div>
+
+    <div class="techou-stats">
+      <div class="stat-card">
+        <div class="stat-num" id="stat-total">0</div>
+        <div class="stat-label">保存済み</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-achieved" style="color:#2e7d32">0</div>
+        <div class="stat-label">参拝済み</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-pending" style="color:var(--gold)">0</div>
+        <div class="stat-label">行きたい</div>
+      </div>
+    </div>
+
+    <div class="techou-filter">
+      <button class="tf-btn active" id="tf-all" onclick="filterTechou('all')">すべて</button>
+      <button class="tf-btn" id="tf-achieved" onclick="filterTechou('achieved')">✅ 参拝済み</button>
+      <button class="tf-btn" id="tf-pending" onclick="filterTechou('pending')">🔖 行きたい</button>
+    </div>
+
+    <div id="techouList"></div>
+  </div>
+
+  <div class="footer">恵方参り · マイ手帳 · デモ版</div>
+</div>
+
+<!-- 参拝記録モーダル -->
+<div class="modal" id="achieveModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modalTitle">⛩ 参拝記録</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="stamp-preview">
+        <span class="stamp-big" id="modalStampIcon">⛩</span>
+        <div style="font-family:var(--serif);font-size:14px;font-weight:600;margin-bottom:4px" id="modalShrineName">神社名</div>
+        <div class="stamp-date" id="modalStampDate"></div>
+      </div>
+      <label class="modal-label">参拝日時</label>
+      <input type="datetime-local" class="modal-input" id="modalDate">
+      <label class="modal-label">メモ・感想</label>
+      <textarea class="modal-textarea" id="modalMemo" placeholder="参拝の感想、御朱印の有無、混雑状況など..."></textarea>
+      <label class="modal-label">写真を追加</label>
+      <div class="photo-upload-area" onclick="document.getElementById('photoInput').click()">
+        <div style="font-size:24px;margin-bottom:4px">📷</div>
+        <div style="font-size:11px;color:var(--muted)">タップして写真を選択</div>
+      </div>
+      <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="handlePhotoUpload(event)">
+      <div class="photo-preview-list" id="photoPreviewList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">キャンセル</button>
+      <button class="btn-primary" onclick="saveAchievement()">🔴 スタンプを押す</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================
+// データ・状態管理
+// =====================================================
+var EHO={
+  4:{kan:'甲',kanR:'きのえ',dir:'東北東微東',deg16:67.5,deg24:75,desc:'木の気・寅卯の間'},
+  9:{kan:'己',kanR:'つちのと',dir:'東北東微東',deg16:67.5,deg24:75,desc:'干合により甲と同方角'},
+  5:{kan:'庚',kanR:'かのえ',dir:'西南西微西',deg16:247.5,deg24:255,desc:'金の気・申酉の間'},
+  0:{kan:'乙',kanR:'きのと',dir:'西南西微西',deg16:247.5,deg24:255,desc:'干合により庚と同方角'},
+  6:{kan:'丙',kanR:'ひのえ',dir:'南南東微南',deg16:157.5,deg24:165,desc:'火の気・巳午の間'},
+  1:{kan:'辛',kanR:'かのと',dir:'南南東微南',deg16:157.5,deg24:165,desc:'干合により丙と同方角'},
+  8:{kan:'戊',kanR:'つちのえ',dir:'南南東微南',deg16:157.5,deg24:165,desc:'中宮は南方に割当（丙）'},
+  3:{kan:'癸',kanR:'みずのと',dir:'南南東微南',deg16:157.5,deg24:165,desc:'干合により丙と同方角'},
+  7:{kan:'壬',kanR:'みずのえ',dir:'北北西微北',deg16:337.5,deg24:345,desc:'水の気・亥子の間'},
+  2:{kan:'丁',kanR:'ひのと',dir:'北北西微北',deg16:337.5,deg24:345,desc:'干合により壬と同方角'},
+};
+
+// 手帳データ（localStorage）
+function loadTechou(){try{return JSON.parse(localStorage.getItem('eho_techou')||'{}');}catch(e){return {};}}
+function saveTechouData(data){try{localStorage.setItem('eho_techou',JSON.stringify(data));}catch(e){}}
+var techouData = loadTechou();
+
+var filterState={shrine:true,temple:true,inari:false};
+var currentFilter='all';
+var leafletMap=null, mapLayers=[];
+var currentModal=null; // 現在モーダルで編集中のID
+var pendingPhotos=[]; // モーダルの仮写真データ
+
+// =====================================================
+// タブ切り替え
+// =====================================================
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('.tab-pane').forEach(function(p){p.classList.remove('active');});
+  document.querySelector('.tab-btn[onclick="switchTab(\''+tab+'\')"]').classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='techou') renderTechou();
+}
+
+// =====================================================
+// 恵方計算
+// =====================================================
+function wareki(y){if(y>=2019)return '令和'+(y-2018)+'年';if(y>=1989)return '平成'+(y-1988)+'年';return y+'年';}
+function getEhoDeg(year,ryuha){var d=EHO[year%10];if(!d)return 165;return ryuha==='16'?d.deg16:d.deg24;}
+function updateCompass(deg){
+  var r=deg*Math.PI/180;
+  var cx=30,cy=30,len=21,blen=13;
+  var x2=(cx+len*Math.sin(r)).toFixed(1),y2=(cy-len*Math.cos(r)).toFixed(1);
+  var xb=cx+blen*Math.sin(r),yb=cy-blen*Math.cos(r);
+  var pr=r+Math.PI/2,wx=3*Math.sin(pr),wy=-3*Math.cos(pr);
+  document.getElementById('compassNeedle').setAttribute('x2',x2);
+  document.getElementById('compassNeedle').setAttribute('y2',y2);
+  document.getElementById('compassArrow').setAttribute('points',x2+','+y2+' '+(xb-wx).toFixed(1)+','+(yb-wy).toFixed(1)+' '+(xb+wx).toFixed(1)+','+(yb+wy).toFixed(1));
+}
+function updateEhoCard(year,ryuha){
+  var d=EHO[year%10];if(!d)return;
+  var deg=getEhoDeg(year,ryuha);
+  document.getElementById('ehoCard').setAttribute('data-kan',d.kan);
+  document.getElementById('ehoKan').textContent='十干「'+d.kan+'（'+d.kanR+'）」の年';
+  document.getElementById('ehoDir').textContent=d.dir;
+  document.getElementById('ehoDeg').textContent=deg;
+  document.getElementById('ehoDesc').textContent=d.desc;
+  document.getElementById('headerYear').textContent=wareki(year)+' · '+year;
+  updateCompass(deg);
+}
+function initYearSelect(){
+  var sel=document.getElementById('yearSelect'),cur=new Date().getFullYear();
+  for(var y=cur+3;y>=cur-5;y--){
+    var d=EHO[y%10],opt=document.createElement('option');
+    opt.value=y;opt.textContent=wareki(y)+'（'+(d?d.kan:'')+'）';
+    if(y===cur)opt.selected=true;
+    sel.appendChild(opt);
+  }
+}
+function onYearChange(){updateEhoCard(parseInt(document.getElementById('yearSelect').value),document.getElementById('ryuhaSelect').value);}
+function onRyuhaChange(){
+  var ryuha=document.getElementById('ryuhaSelect').value;
+  var notes={'16':'📖 <b>一般的な16方位</b>：メディアで使われる表現。南南東=157.5°。','24':'📐 <b>本来の24方位</b>：陰陽道「二十四山」に基づく正確な方角。あちこち方位と同じ基準。','fusui':'🧭 <b>風水24山（厳密）</b>：専門家が使う最も精密な区分（15°刻み）。'};
+  document.getElementById('ryuhaNote').innerHTML=notes[ryuha]||'';
+  updateEhoCard(parseInt(document.getElementById('yearSelect').value),ryuha);
+}
+document.getElementById('distRange').addEventListener('input',function(){document.getElementById('distVal').textContent=this.value+'km';});
+document.getElementById('widthRange').addEventListener('input',function(){document.getElementById('widthVal').textContent='±'+this.value+'°';});
+function toggleChip(chipId,key){filterState[key]=!filterState[key];document.getElementById(chipId).classList.toggle('active',filterState[key]);}
+
+// =====================================================
+// サンプルデータ（扇形に散らばった配置）
+// =====================================================
+var ORIGIN_LAT=35.852,ORIGIN_LNG=139.887; // 動的に更新される
+function calcLatLng(km,deg){
+  var r=deg*Math.PI/180;
+  return{lat:ORIGIN_LAT+km*Math.cos(r)/111,lng:ORIGIN_LNG+km*Math.sin(r)/(111*Math.cos(ORIGIN_LAT*Math.PI/180))};
+}
+var RAW=[
+  ['宝蔵寺','temple',5.2,163.0,false,''],
+  ['香取神社（松戸）','shrine',7.8,168.5,false,''],
+  ['稲荷神社（流山）','shrine',10.3,162.0,true,''],
+  ['東漸寺','temple',12.5,166.0,false,'念仏の道場として有名'],
+  ['八幡神社（流山）','shrine',14.1,158.0,false,''],
+  ['諏訪神社（市川）','shrine',16.8,171.0,false,''],
+  ['浄光寺','temple',18.2,163.5,false,''],
+  ['葛飾八幡宮','shrine',20.4,169.5,false,'下総総社として知られる古社'],
+  ['稲荷大明神（市川）','shrine',22.0,160.5,true,''],
+  ['中山法華経寺','temple',24.6,165.0,false,'日蓮宗の大本山'],
+  ['大野神社','shrine',27.3,156.0,false,''],
+  ['東勝寺','temple',29.8,172.0,false,''],
+  ['船橋大神宮','shrine',31.5,164.5,false,'日本一の燈明台が残る神社'],
+  ['稲荷神社（船橋）','shrine',33.2,167.0,true,''],
+  ['薬円台神社','shrine',36.4,159.5,false,''],
+  ['東禅寺','temple',39.1,162.0,false,''],
+  ['三山七年祭神社群','shrine',42.5,170.0,false,'7年に一度の大祭で有名'],
+  ['稲荷社（習志野）','shrine',45.3,164.0,true,''],
+  ['成田山新勝寺','temple',52.1,166.5,false,'年間約1000万人が参拝する大寺院'],
+  ['観福寺（成田）','temple',56.8,163.0,false,'猫の寺として知られる'],
+  ['香取神宮','shrine',63.2,165.5,false,'全国400社の香取神社の総本社'],
+];
+var SAMPLE=RAW.map(function(r){
+  var pos=calcLatLng(r[2],r[3]);
+  var diff=Math.abs(r[3]-165);if(diff>180)diff=360-diff;
+  var addr=r[2]<15?'千葉県松戸市・流山市周辺':r[2]<35?'千葉県市川市・船橋市周辺':r[2]<55?'千葉県習志野市・八千代市周辺':'千葉県成田市・香取市周辺';
+  return{id:'shrine_'+r[0].replace(/[（）\s]/g,'_'),name:r[0],type:r[1],dist:r[2],angle:r[3],diff:diff,isInari:r[4],addr:addr,note:r[5],lat:pos.lat,lng:pos.lng};
+});
+
+// =====================================================
+// 手帳操作
+// =====================================================
+function getShrineById(id){
+  // まずSAMPLEから検索、なければtechouDataから
+  var s=SAMPLE.find(function(s){return s.id===id;});
+  if(s)return s;
+  return techouData[id]||null;
+}
+
+function isSaved(id){return !!techouData[id];}
+function isAchieved(id){return techouData[id]&&techouData[id].achieved;}
+
+function saveShrine(id){
+  // SAMPLEから検索、なければ現在の検索結果から探す
+  var s=getShrineById(id);
+  if(!s && currentSearchResults){
+    s=currentSearchResults.find(function(p){return p.id===id;});
+  }
+  if(!s)return;
+  if(!techouData[id]){
+    techouData[id]={id:id,name:s.name,type:s.type,addr:s.addr||'',note:s.note||'',isInari:s.isInari||false,savedAt:new Date().toISOString(),achieved:false,achievedAt:null,memo:'',photos:[]};
+    saveTechouData(techouData);
+    updateTechouBadge();
+    renderSearchResults(currentSearchResults,currentEhoDeg,currentAngleWidth);
+  }
+}
+
+function openAchieveModal(id){
+  var s=getShrineById(id);
+  if(!s && currentSearchResults) s=currentSearchResults.find(function(p){return p.id===id;});
+  if(!s) s=techouData[id];
+  if(!s)return;
+  currentModal=id;
+  pendingPhotos=[];
+  document.getElementById('modalTitle').textContent=(s.type==='shrine'?'⛩':'🏯')+' 参拝記録';
+  document.getElementById('modalStampIcon').textContent=s.type==='shrine'?'⛩':'🏯';
+  document.getElementById('modalShrineName').textContent=s.name;
+  var now=new Date();
+  var dt=now.getFullYear()+'-'+(('0'+(now.getMonth()+1)).slice(-2))+'-'+(('0'+now.getDate()).slice(-2))+'T'+(('0'+now.getHours()).slice(-2))+':'+(('0'+now.getMinutes()).slice(-2));
+  var existing=techouData[id];
+  document.getElementById('modalDate').value=existing&&existing.achievedAt?existing.achievedAt.slice(0,16):dt;
+  document.getElementById('modalMemo').value=existing?existing.memo:'';
+  document.getElementById('modalStampDate').textContent=formatDate(document.getElementById('modalDate').value);
+  document.getElementById('photoPreviewList').innerHTML='';
+  if(existing&&existing.photos){
+    existing.photos.forEach(function(p,i){addPhotoPreview(p,i);});
+    pendingPhotos=existing.photos.slice();
+  }
+  document.getElementById('achieveModal').classList.add('show');
+  document.getElementById('modalDate').addEventListener('input',function(){
+    document.getElementById('modalStampDate').textContent=formatDate(this.value);
+  });
+}
+
+function closeModal(){document.getElementById('achieveModal').classList.remove('show');currentModal=null;pendingPhotos=[];}
+
+function saveAchievement(){
+  if(!currentModal)return;
+  var id=currentModal;
+  var s=getShrineById(id)||{id:id,name:'',type:'shrine',addr:'',note:'',isInari:false};
+  if(!techouData[id]){
+    techouData[id]={id:id,name:s.name,type:s.type,addr:s.addr,note:s.note||'',isInari:s.isInari,savedAt:new Date().toISOString(),achieved:false,achievedAt:null,memo:'',photos:[]};
+  }
+  techouData[id].achieved=true;
+  techouData[id].achievedAt=document.getElementById('modalDate').value;
+  techouData[id].memo=document.getElementById('modalMemo').value;
+  techouData[id].photos=pendingPhotos.slice();
+  saveTechouData(techouData);
+  closeModal();
+  updateTechouBadge();
+  if(currentSearchResults) renderSearchResults(currentSearchResults,currentEhoDeg,currentAngleWidth);
+  if(document.getElementById('tab-techou').classList.contains('active')) renderTechou();
+}
+
+function removeFromTechou(id){
+  if(!confirm('手帳から削除しますか？')) return;
+  delete techouData[id];
+  saveTechouData(techouData);
+  updateTechouBadge();
+  renderTechou();
+  if(currentSearchResults) renderSearchResults(currentSearchResults,currentEhoDeg,currentAngleWidth);
+}
+
+function updateTechouBadge(){
+  var count=Object.keys(techouData).length;
+  var badge=document.getElementById('techou-badge');
+  if(count>0){badge.style.display='inline';badge.textContent=count;}
+  else{badge.style.display='none';}
+  var achieved=Object.values(techouData).filter(function(d){return d.achieved;}).length;
+  var pending=count-achieved;
+  document.getElementById('stat-total').textContent=count;
+  document.getElementById('stat-achieved').textContent=achieved;
+  document.getElementById('stat-pending').textContent=pending;
+}
+
+function formatDate(dtStr){
+  if(!dtStr)return '';
+  var d=new Date(dtStr);
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
+
+// 写真アップロード
+function handlePhotoUpload(event){
+  var files=event.target.files;
+  for(var i=0;i<files.length;i++){
+    (function(file){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        pendingPhotos.push(e.target.result);
+        addPhotoPreview(e.target.result,pendingPhotos.length-1);
+      };
+      reader.readAsDataURL(file);
+    })(files[i]);
+  }
+  event.target.value='';
+}
+
+function addPhotoPreview(src,idx){
+  var list=document.getElementById('photoPreviewList');
+  var item=document.createElement('div');
+  item.className='photo-preview-item';
+  item.innerHTML='<img src="'+src+'" /><div class="remove-photo" onclick="removePhoto('+idx+')">×</div>';
+  list.appendChild(item);
+}
+
+function removePhoto(idx){
+  pendingPhotos.splice(idx,1);
+  var list=document.getElementById('photoPreviewList');
+  list.innerHTML='';
+  pendingPhotos.forEach(function(p,i){addPhotoPreview(p,i);});
+}
+
+// =====================================================
+// 手帳レンダリング
+// =====================================================
+function filterTechou(type){
+  currentFilter=type;
+  ['all','achieved','pending'].forEach(function(t){
+    document.getElementById('tf-'+t).classList.toggle('active',t===type);
+  });
+  renderTechou();
+}
+
+function renderTechou(){
+  updateTechouBadge();
+  var list=document.getElementById('techouList');
+  var items=Object.values(techouData).filter(function(d){
+    if(currentFilter==='achieved')return d.achieved;
+    if(currentFilter==='pending')return !d.achieved;
+    return true;
+  }).sort(function(a,b){
+    if(a.achieved&&!b.achieved)return -1;
+    if(!a.achieved&&b.achieved)return 1;
+    return new Date(b.savedAt)-new Date(a.savedAt);
+  });
+
+  if(!items.length){
+    var msgs={all:'まだ保存された神社・お寺がありません。\n検索結果から「行きたい」を押して追加しましょう。',achieved:'まだ参拝済みの記録がありません。\n参拝したら「参拝済み」ボタンを押してスタンプを押しましょう！',pending:'行きたいリストが空です。\n検索結果から「行きたい」ボタンを押して追加しましょう。'};
+    list.innerHTML='<div class="techou-empty"><div class="icon">📖</div><p>'+msgs[currentFilter]+'</p></div>';
+    return;
+  }
+
+  list.innerHTML='';
+  items.forEach(function(d){
+    var icon=d.type==='shrine'?'⛩':'🏯';
+    var typeLabel=d.type==='shrine'?'神社':'お寺';
+    var typeClass=d.type==='shrine'?'tag-shrine':'tag-temple';
+    var inariTag=d.isInari?'<span class="shrine-tag tag-inari" style="font-size:9px;padding:1px 5px">🦊 稲荷</span>':'';
+
+    var card=document.createElement('div');
+    card.className='techou-card '+(d.achieved?'achieved-card':'saved-card');
+
+    var photosHtml='';
+    if(d.photos&&d.photos.length){
+      photosHtml='<div class="techou-photos">';
+      d.photos.forEach(function(p){photosHtml+='<img class="techou-photo" src="'+p+'" onclick="viewPhoto(\''+p+'\')"/>';});
+      photosHtml+='</div>';
+    }
+    var memoHtml=d.memo?'<div class="techou-memo">📝 '+d.memo+'</div>':'';
+
+    card.innerHTML=
+      '<div class="techou-card-header">'
+      +'<div class="techou-stamp '+(d.achieved?'done':'pending')+'">'
+      +icon
+      +(d.achieved?'<div class="stamp-check">✓</div>':'')
+      +'</div>'
+      +'<div class="techou-info">'
+      +  '<div class="techou-name">'+d.name+'</div>'
+      +  '<div class="techou-addr">'+d.addr+'</div>'
+      +  '<div class="techou-tags"><span class="shrine-tag '+typeClass+'" style="font-size:9px;padding:1px 5px">'+typeLabel+'</span>'+inariTag+'</div>'
+      +  (d.achieved?'<div class="techou-date">✅ '+formatDate(d.achievedAt)+'</div>':'<div class="techou-pending-label">🔖 行きたいリスト</div>')
+      +'</div>'
+      +'</div>'
+      +(memoHtml||photosHtml?'<div class="techou-card-body">'+memoHtml+photosHtml+'</div>':'')
+      +'<div class="techou-actions">'
+      +(d.achieved
+        ?'<button class="techou-btn primary" onclick="openAchieveModal(\''+d.id+'\')">✏️ 記録を編集</button>'
+        :'<button class="techou-btn primary" onclick="openAchieveModal(\''+d.id+'\')">🔴 参拝済みにする</button>')
+      +'<button class="techou-btn danger" onclick="removeFromTechou(\''+d.id+'\')">🗑 削除</button>'
+      +'</div>';
+
+    list.appendChild(card);
+  });
+}
+
+function viewPhoto(src){window.open(src,'_blank');}
+
+// =====================================================
+// Leaflet地図
+// =====================================================
+function clearLayers(){mapLayers.forEach(function(l){if(leafletMap)leafletMap.removeLayer(l);});mapLayers=[];}
+function destPoint(lat,lng,deg,km){
+  var r=deg*Math.PI/180;
+  return[lat+km*Math.cos(r)/111,lng+km*Math.sin(r)/(111*Math.cos(lat*Math.PI/180))];
+}
+
+function buildMap(places,ehoDeg,angleWidth,maxDist){
+  if(leafletMap){clearLayers();}
+  else{
+    leafletMap=L.map('map').setView([ORIGIN_LAT,ORIGIN_LNG],10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:18}).addTo(leafletMap);
+  }
+  var lineKm=Math.min(maxDist*1.1,110);
+  var steps=20,fanPoints=[[ORIGIN_LAT,ORIGIN_LNG]];
+  for(var i=0;i<=steps;i++){var deg=(ehoDeg-angleWidth)+(angleWidth*2)*(i/steps);fanPoints.push(destPoint(ORIGIN_LAT,ORIGIN_LNG,deg,lineKm));}
+  fanPoints.push([ORIGIN_LAT,ORIGIN_LNG]);
+  mapLayers.push(L.polygon(fanPoints,{color:'#d32f2f',weight:0,fillColor:'#d32f2f',fillOpacity:0.12}).addTo(leafletMap));
+  [ehoDeg-angleWidth,ehoDeg+angleWidth].forEach(function(deg){
+    mapLayers.push(L.polyline([[ORIGIN_LAT,ORIGIN_LNG],destPoint(ORIGIN_LAT,ORIGIN_LNG,deg,lineKm)],{color:'#d32f2f',weight:2,opacity:0.7,dashArray:'5,5'}).addTo(leafletMap));
+  });
+  mapLayers.push(L.polyline([[ORIGIN_LAT,ORIGIN_LNG],destPoint(ORIGIN_LAT,ORIGIN_LNG,ehoDeg,lineKm)],{color:'#d32f2f',weight:3.5,opacity:0.9,dashArray:'10,4'}).addTo(leafletMap));
+  [10,30,60].forEach(function(km){
+    if(km<=lineKm)mapLayers.push(L.circle([ORIGIN_LAT,ORIGIN_LNG],{radius:km*1000,color:'#aaa',weight:0.8,opacity:0.25,fill:false,dashArray:'3,6'}).addTo(leafletMap));
+  });
+  var originIcon=L.divIcon({html:'<div class="mk-origin">★</div>',iconSize:[28,28],iconAnchor:[14,14],className:''});
+  mapLayers.push(L.marker([ORIGIN_LAT,ORIGIN_LNG],{icon:originIcon}).bindPopup('<b>出発地</b>').addTo(leafletMap));
+
+  places.forEach(function(p,i){
+    var achieved=isAchieved(p.id);
+    var cls=achieved?'mk-achieved':(p.isInari?'mk-inari':(p.type==='shrine'?'mk-shrine':'mk-temple'));
+    var iconHtml=achieved?'<div class="mk-achieved">★</div>':'<div class="'+cls+'">'+(i+1)+'</div>';
+    var icon=L.divIcon({html:iconHtml,iconSize:[22,22],iconAnchor:[11,11],className:''});
+    var mapUrl='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+p.addr);
+    var typeLabel=p.type==='shrine'?'⛩ 神社':'🏯 お寺';
+    var achievedLabel=achieved?'<br><span style="color:#2e7d32;font-size:11px">✅ 参拝済み</span>':'';
+    var popup='<b>'+p.name+'</b>'+achievedLabel+'<br><span style="font-size:11px;color:#666">'+p.addr+'</span><br><span style="font-size:11px">'+typeLabel+' · '+p.dist.toFixed(1)+'km</span><br><a href="'+mapUrl+'" target="_blank" style="font-size:11px;color:#c8922a">🗺 Googleマップで開く →</a>';
+    var mk=L.marker([p.lat,p.lng],{icon:icon}).bindPopup(popup).addTo(leafletMap);
+    mk.on('click',function(){
+      document.querySelectorAll('.shrine-card').forEach(function(c){c.classList.remove('highlighted');});
+      var card=document.getElementById('card-'+i);
+      if(card){card.classList.add('highlighted');card.scrollIntoView({behavior:'smooth',block:'nearest'});}
+    });
+    mapLayers.push(mk);
+  });
+  var coords=[[ORIGIN_LAT,ORIGIN_LNG]].concat(places.map(function(p){return[p.lat,p.lng];}));
+  if(coords.length>1)leafletMap.fitBounds(coords,{padding:[30,30]});
+  setTimeout(function(){leafletMap.invalidateSize();},200);
+}
+
+// =====================================================
+// 検索結果レンダリング
+// =====================================================
+var currentSearchResults=null,currentEhoDeg=165,currentAngleWidth=10;
+
+function renderSearchResults(filtered,ehoDeg,angleWidth){
+  currentSearchResults=filtered;currentEhoDeg=ehoDeg;currentAngleWidth=angleWidth;
+  var list=document.getElementById('shrineList');list.innerHTML='';
+  if(!filtered.length){
+    list.innerHTML='<div style="text-align:center;padding:36px;color:var(--muted)"><div style="font-size:32px;margin-bottom:8px">🔍</div><p style="font-size:12px;line-height:2">条件に合う神社・お寺が見つかりませんでした。<br>距離や方角の幅を広げてみてください。</p></div>';
+    return;
+  }
+  filtered.forEach(function(p,i){
+    var icon=p.type==='shrine'?'⛩':'🏯';
+    var typeLabel=p.type==='shrine'?'神社':'お寺';
+    var typeClass=p.type==='shrine'?'tag-shrine':'tag-temple';
+    var inariTag=p.isInari?'<span class="shrine-tag tag-inari">🦊 稲荷</span>':'';
+    var noteHtml=p.note?'<div class="shrine-note">'+p.note+'</div>':'';
+    var mapUrl='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+p.addr);
+    var saved=isSaved(p.id),achieved=isAchieved(p.id);
+    var diff=(p._diff!==undefined?p._diff:p.diff).toFixed(1);
+
+    var card=document.createElement('div');
+    card.className='shrine-card'+(saved?' saved':'')+(achieved?' achieved':'');
+    card.id='card-'+i;
+    card.innerHTML=
+      '<div class="shrine-num">'+(achieved?'✓':(i+1))+'</div>'
+      +'<div class="shrine-icon">'+icon+'</div>'
+      +'<div class="shrine-body">'
+      +  '<div class="shrine-name">'+p.name+(achieved?'<span style="font-size:10px;color:#2e7d32;margin-left:6px">✅ 参拝済み</span>':'')+'</div>'
+      +  '<div class="shrine-addr">'+p.addr+'</div>'
+      +  '<div class="shrine-meta">'
+      +    '<span class="shrine-tag tag-dist">'+p.dist.toFixed(1)+'km</span>'
+      +    '<span class="shrine-tag '+typeClass+'">'+typeLabel+'</span>'
+      +    '<span class="shrine-tag tag-angle">方角'+p.angle+'°（差'+diff+'°）</span>'
+      +    inariTag
+      +  '</div>'
+      +  noteHtml
+      +'</div>'
+      +'<div class="card-actions">'
+      +(achieved
+        ?'<button class="btn-achieve achieved" onclick="openAchieveModal(\''+p.id+'\')">✅ 済</button>'
+        :'<button class="btn-achieve" onclick="quickAchieve(\''+p.id+'\')">参拝済み</button>')
+      +(saved&&!achieved
+        ?'<button class="btn-save saved" onclick="void(0)">🔖 保存済</button>'
+        :(!achieved?'<button class="btn-save" onclick="saveShrine(\''+p.id+'\')">🔖 行きたい</button>':''))
+      +'</div>';
+
+    card.querySelector('.shrine-body').style.cursor='pointer';
+    card.querySelector('.shrine-body').addEventListener('click',function(){
+      var mkIdx=i+5+3; // fan+lines+circles+origin
+      if(leafletMap&&mapLayers[mkIdx]){leafletMap.setView([p.lat,p.lng],13);mapLayers[mkIdx].openPopup();}
+      document.querySelectorAll('.shrine-card').forEach(function(c){c.classList.remove('highlighted');});
+      card.classList.add('highlighted');
+      window.open(mapUrl,'_blank');
+    });
+    list.appendChild(card);
+  });
+}
+
+function quickAchieve(id){
+  saveShrine(id);
+  openAchieveModal(id);
+}
+
+// =====================================================
+// メイン検索
+// =====================================================
+// =====================================================
+// 現在地取得
+// =====================================================
+function setCurrentLocation(){
+  var btn=document.getElementById('gpsBtn');
+  var status=document.getElementById('gpsStatus');
+  if(!navigator.geolocation){status.textContent='このブラウザでは現在地取得できません';return;}
+  btn.textContent='⏳';btn.disabled=true;
+  status.textContent='現在地を取得中...';
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      ORIGIN_LAT=pos.coords.latitude;
+      ORIGIN_LNG=pos.coords.longitude;
+      // 逆ジオコーディングで住所取得
+      fetch('https://nominatim.openstreetmap.org/reverse?lat='+ORIGIN_LAT+'&lon='+ORIGIN_LNG+'&format=json&accept-language=ja')
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var addr=d.address;
+          var label=(addr.prefecture||'')+(addr.city||addr.town||addr.village||'')+(addr.suburb||addr.neighbourhood||'');
+          document.getElementById('address').value=label||('緯度'+ORIGIN_LAT.toFixed(4)+' 経度'+ORIGIN_LNG.toFixed(4));
+          status.textContent='📍 現在地をセットしました';
+          btn.textContent='📍';btn.disabled=false;
+        })
+        .catch(function(){
+          document.getElementById('address').value='緯度'+ORIGIN_LAT.toFixed(4)+' 経度'+ORIGIN_LNG.toFixed(4);
+          status.textContent='📍 現在地をセットしました（住所取得失敗）';
+          btn.textContent='📍';btn.disabled=false;
+        });
+    },
+    function(err){
+      var msgs={1:'位置情報の使用が拒否されました',2:'現在地を取得できませんでした',3:'タイムアウトしました'};
+      status.textContent='❌ '+(msgs[err.code]||'エラーが発生しました');
+      btn.textContent='📍';btn.disabled=false;
+    },
+    {timeout:10000,enableHighAccuracy:true}
+  );
+}
+
+// =====================================================
+// 住所→座標（Nominatim）
+// =====================================================
+async function geocodeAddress(address){
+  // 緯度経度が直接入力されている場合
+  var m=address.match(/緯度([0-9.]+)\s*経度([0-9.]+)/);
+  if(m)return{lat:parseFloat(m[1]),lng:parseFloat(m[2])};
+
+  // 番地を段階的に省略して再試行
+  var candidates=[address];
+  // 数字-数字 の番地を除去したバージョンを追加
+  var noStreet=address.replace(/[0-9０-９]+[-－ー][0-9０-９]+.*$/,'').trim();
+  if(noStreet!==address) candidates.push(noStreet);
+  // さらに丁目以降を除去
+  var noChome=address.replace(/[0-9０-９]+丁目.*$/,'').trim();
+  if(noChome!==address && noChome!==noStreet) candidates.push(noChome);
+
+  for(var i=0;i<candidates.length;i++){
+    var q=candidates[i];
+    if(!q) continue;
+    try{
+      var res=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=1&countrycodes=jp',{headers:{'Accept-Language':'ja'}});
+      var data=await res.json();
+      if(data.length) return{lat:parseFloat(data[0].lat),lng:parseFloat(data[0].lon)};
+    }catch(e){}
+  }
+  throw new Error('住所「'+address+'」が見つかりませんでした\n市区町村レベル（例：千葉県印西市）で入力してみてください');
+}
+
+// =====================================================
+// Overpass APIで神社・寺を取得
+// =====================================================
+async function fetchShrinesFromOSM(lat,lng,radiusKm,ehoDeg,angleWidth){
+  var r=radiusKm*1000;
+  var query='[out:json][timeout:30];(node["amenity"="place_of_worship"]["religion"="shinto"](around:'+r+','+lat+','+lng+');node["amenity"="place_of_worship"]["religion"="buddhist"](around:'+r+','+lat+','+lng+');node["historic"="wayside_shrine"](around:'+r+','+lat+','+lng+'););out body;';
+  var res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(query)});
+  var data=await res.json();
+  var elements=data.elements||[];
+
+  function bearing(lat1,lng1,lat2,lng2){
+    var dL=(lng2-lng1)*Math.PI/180;
+    var y=Math.sin(dL)*Math.cos(lat2*Math.PI/180);
+    var x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dL);
+    return(Math.atan2(y,x)*180/Math.PI+360)%360;
+  }
+  function distKm(lat1,lng1,lat2,lng2){
+    var R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+
+  var inariWords=['稲荷','いなり','イナリ','Inari','inari'];
+  var results=[];
+  elements.forEach(function(e){
+    if(!e.lat||!e.lon)return;
+    var name=e.tags&&(e.tags.name||e.tags['name:ja'])||'（名称不明）';
+    var religion=e.tags&&e.tags.religion||'';
+    var isShrine=religion==='shinto'||e.tags&&e.tags.historic==='wayside_shrine';
+    var isTemple=religion==='buddhist';
+    var isInari=inariWords.some(function(w){return name.indexOf(w)>=0;});
+    var dist=distKm(lat,lng,e.lat,e.lon);
+    var angle=bearing(lat,lng,e.lat,e.lon);
+    var diff=Math.abs(angle-ehoDeg);if(diff>180)diff=360-diff;
+    var id='osm_'+e.id;
+    results.push({id:id,name:name,type:isShrine?'shrine':'temple',dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,addr:'',note:'',lat:e.lat,lng:e.lon,_diff:diff});
+  });
+  return results;
+}
+
+async function doSearch(){
+  var btn=document.getElementById('searchBtn'),loading=document.getElementById('loading'),results=document.getElementById('results');
+  btn.disabled=true;btn.textContent='検索中...';
+  loading.classList.add('show');results.classList.remove('show');
+
+  var year=parseInt(document.getElementById('yearSelect').value);
+  var ryuha=document.getElementById('ryuhaSelect').value;
+  var ehoDeg=getEhoDeg(year,ryuha);
+  var maxDist=parseInt(document.getElementById('distRange').value);
+  var angleWidth=parseInt(document.getElementById('widthRange').value);
+  var address=document.getElementById('address').value.trim();
+
+  try{
+    // 住所から座標取得
+    document.getElementById('loadingMsg').textContent='住所を確認中...';
+    var coords=await geocodeAddress(address);
+    ORIGIN_LAT=coords.lat;ORIGIN_LNG=coords.lng;
+
+    // Overpass APIで神社・寺取得
+    document.getElementById('loadingMsg').textContent='神社・お寺を検索中...';
+    var allPlaces=await fetchShrinesFromOSM(ORIGIN_LAT,ORIGIN_LNG,maxDist,ehoDeg,angleWidth);
+
+    // フィルタリング
+    var filtered=allPlaces.filter(function(p){
+      if(p.dist>maxDist)return false;
+      if(p._diff>angleWidth)return false;
+      if(!filterState.inari&&p.isInari)return false;
+      if(p.type==='shrine'&&!filterState.shrine)return false;
+      if(p.type==='temple'&&!filterState.temple)return false;
+      return true;
+    }).sort(function(a,b){return a.dist-b.dist;}).slice(0,50);
+
+    loading.classList.remove('show');
+    btn.disabled=false;btn.textContent='⛩ 恵方の神社・お寺を探す';
+    document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（OpenStreetMapデータ）';
+    results.classList.add('show');
+    setTimeout(function(){buildMap(filtered,ehoDeg,angleWidth,maxDist);},150);
+    renderSearchResults(filtered,ehoDeg,angleWidth);
+    results.scrollIntoView({behavior:'smooth',block:'start'});
+
+  }catch(err){
+    loading.classList.remove('show');
+    btn.disabled=false;btn.textContent='⛩ 恵方の神社・お寺を探す';
+    alert('エラー: '+err.message+'\n\nネットワーク接続を確認してください。');
+  }
+}
+
+// 初期化 - Leaflet読み込み完了後に実行
+function initApp(){
+  initYearSelect();
+  onYearChange();
+  updateTechouBadge();
+  renderTechou();
+}
+
+// Leaflet JSが読み込まれるまで待つ
+function waitForLeaflet(){
+  if(typeof L !== 'undefined'){
+    initApp();
+  } else {
+    setTimeout(waitForLeaflet, 50);
+  }
+}
+document.addEventListener('DOMContentLoaded', waitForLeaflet);
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+</body>
+</html>
