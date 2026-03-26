@@ -964,7 +964,7 @@ async function doSearch(){
       if(p.type==='shrine'&&!filterState.shrine)return false;
       if(p.type==='temple'&&!filterState.temple)return false;
       return true;
-    }).sort(function(a,b){return a.dist-b.dist;}).slice(0,50);
+    }).sort(function(a,b){return a.dist-b.dist;}).slice(0,200);
 
     loading.classList.remove('show');
     btn.disabled=false;btn.textContent='⛩ 恵方の神社・お寺を探す';
