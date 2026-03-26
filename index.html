@@ -769,39 +769,41 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
 var currentSearchResults=null,currentEhoDeg=165,currentAngleWidth=10;
 
 // =====================================================
-// Wikipedia概要取得
+// Wikipedia概要取得（座標geosearch優先）
 // =====================================================
 var wikiCache={};
-async function fetchWikiExcerpt(name){
-  if(wikiCache[name]!==undefined)return wikiCache[name];
+async function fetchWikiExcerpt(name,lat,lng){
+  var cacheKey=name+'|'+lat+'|'+lng;
+  if(wikiCache[cacheKey]!==undefined)return wikiCache[cacheKey];
   try{
-    // まず名前で直接検索
-    var url='https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=3&titles='+encodeURIComponent(name)+'&format=json&origin=*&redirects=1';
-    var res=await fetch(url);
-    var data=await res.json();
-    var pages=data.query.pages;
-    var page=Object.values(pages)[0];
-    if(page&&page.extract&&!page.missing){
-      var text=page.extract.replace(/\n+/g,' ').trim();
-      if(text.length>20){wikiCache[name]={text:text,title:page.title};return wikiCache[name];}
+    async function getExtract(title){
+      var r=await fetch('https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=6&titles='+encodeURIComponent(title)+'&format=json&origin=*&redirects=1');
+      var d=await r.json();
+      var pg=Object.values(d.query.pages)[0];
+      if(pg&&pg.extract&&!pg.missing){return{text:pg.extract.replace(/\n+/g,' ').trim(),title:pg.title};}
+      return null;
     }
-    // 見つからなければサーチAPIで試す
-    var surl='https://ja.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(name)+'&format=json&origin=*&srlimit=1&srnamespace=0';
-    var sres=await fetch(surl);
-    var sdata=await sres.json();
-    var hits=sdata.query.search;
-    if(!hits||!hits.length){wikiCache[name]=null;return null;}
-    var stitle=hits[0].title;
-    var url2='https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=3&titles='+encodeURIComponent(stitle)+'&format=json&origin=*&redirects=1';
-    var res2=await fetch(url2);
-    var data2=await res2.json();
-    var page2=Object.values(data2.query.pages)[0];
-    if(page2&&page2.extract){
-      var text2=page2.extract.replace(/\n+/g,' ').trim();
-      wikiCache[name]={text:text2,title:page2.title};return wikiCache[name];
+    // ①座標で近くのWikipediaページを検索（500m以内）
+    var gr=await fetch('https://ja.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+lat+'|'+lng+'&gsradius=500&gslimit=5&format=json&origin=*');
+    var gd=await gr.json();
+    var geo=(gd.query&&gd.query.geosearch)||[];
+    // 施設名と部分一致するものを優先
+    var match=geo.find(function(g){return g.title.indexOf(name)>=0||name.indexOf(g.title)>=0;});
+    if(!match&&geo.length)match=geo[0]; // 一致なければ最近傍
+    if(match){
+      var ex=await getExtract(match.title);
+      if(ex){wikiCache[cacheKey]=ex;return ex;}
     }
-    wikiCache[name]=null;return null;
-  }catch(e){wikiCache[name]=null;return null;}
+    // ②名前で直接検索
+    var ex2=await getExtract(name);
+    if(ex2){wikiCache[cacheKey]=ex2;return ex2;}
+    // ③サーチAPIにフォールバック
+    var sr=await fetch('https://ja.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(name)+'&format=json&origin=*&srlimit=1&srnamespace=0');
+    var sd=await sr.json();
+    var hits=(sd.query&&sd.query.search)||[];
+    if(hits.length){var ex3=await getExtract(hits[0].title);if(ex3){wikiCache[cacheKey]=ex3;return ex3;}}
+    wikiCache[cacheKey]=null;return null;
+  }catch(e){wikiCache[cacheKey]=null;return null;}
 }
 
 function renderSearchResults(filtered,ehoDeg,angleWidth){
@@ -850,28 +852,42 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +'</div>';
 
     // Wikipedia概要トグル
-    (function(idx,pname){
+    (function(idx,pname,plat,plng){
       var btn=card.querySelector('#wiki-btn-'+idx);
       var box=card.querySelector('#wiki-box-'+idx);
-      var loaded=false,open=false;
+      var loaded=false,open=false,expanded=false,fullText='',wikiTitle='';
+      var SHORT=80;
       btn.addEventListener('click',function(e){
         e.stopPropagation();
         open=!open;
         box.style.display=open?'block':'none';
+        btn.textContent=open?'📖 概要を閉じる ▲':'📖 概要を見る ▼';
         if(open&&!loaded){
           loaded=true;
           box.innerHTML='<span style="color:#aaa;font-size:10px">読み込み中...</span>';
-          fetchWikiExcerpt(pname).then(function(result){
+          fetchWikiExcerpt(pname,plat,plng).then(function(result){
             if(result){
-              box.innerHTML=result.text.substring(0,200)+(result.text.length>200?'…':'')+' <a href="https://ja.wikipedia.org/wiki/'+encodeURIComponent(result.title)+'" target="_blank">Wikipedia →</a>';
+              fullText=result.text; wikiTitle=result.title;
+              renderWikiBox(false);
             }else{
               box.innerHTML='<span style="color:#aaa;font-size:10px">Wikipediaに情報がありません</span>';
             }
           });
         }
-        btn.textContent=open?'📖 概要を閉じる ▲':'📖 概要を見る ▼';
       });
-    })(i,p.name);
+      function renderWikiBox(exp){
+        expanded=exp;
+        var short=fullText.substring(0,SHORT);
+        var hasMore=fullText.length>SHORT;
+        var wikiLink=' <a href="https://ja.wikipedia.org/wiki/'+encodeURIComponent(wikiTitle)+'" target="_blank" style="white-space:nowrap">Wikipedia →</a>';
+        if(!exp&&hasMore){
+          box.innerHTML=short+'… <button style="font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline" id="wiki-more-'+idx+'">もっと見る ▼</button>';
+          box.querySelector('#wiki-more-'+idx).addEventListener('click',function(e){e.stopPropagation();renderWikiBox(true);});
+        }else{
+          box.innerHTML=fullText+wikiLink;
+        }
+      }
+    })(i,p.name,p.lat,p.lng);
 
     card.querySelector('.shrine-body').style.cursor='pointer';
     card.querySelector('.shrine-body').addEventListener('click',function(){
