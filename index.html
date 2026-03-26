@@ -100,8 +100,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .tag-inari{background:#fce4ec;color:#880e4f}
 .tag-angle{background:#e3f2fd;color:#1565c0}
 .shrine-note{font-size:10px;color:var(--muted);margin-top:2px;font-style:italic}
-.wiki-toggle{font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px;font-family:var(--sans);text-decoration:underline;display:block}
-.wiki-excerpt{font-size:11px;color:#555;line-height:1.7;margin-top:6px;padding:8px 10px;background:#fffbf3;border-left:2px solid var(--gold);border-radius:0 3px 3px 0;display:none}
+.wiki-excerpt{font-size:11px;color:#555;line-height:1.7;margin-top:6px;padding:8px 10px;background:#fffbf3;border-left:2px solid var(--gold);border-radius:0 3px 3px 0;}
 .wiki-more-btn{font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:0;font-family:var(--sans);text-decoration:underline;white-space:nowrap}
 .wiki-link{color:var(--gold);font-size:10px;white-space:nowrap;text-decoration:underline}
 
@@ -829,8 +828,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +    inariTag
       +  '</div>'
       +  noteHtml
-      +  '<button class="wiki-toggle" id="wiki-btn-'+i+'">📖 概要を見る ▼</button>'
-      +  '<div class="wiki-excerpt" id="wiki-box-'+i+'"></div>'
+      +  '<div class="wiki-excerpt" id="wiki-box-'+i+'" style="display:none"></div>'
       +'</div>'
       +'<div class="card-actions">'
       +(achieved
@@ -848,49 +846,8 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       window.open(mapUrl,'_blank');
     });
 
-    // Wikipedia概要トグル（クリック伝播なし）
-    (function(idx,pname){
-      var btn=card.querySelector('#wiki-btn-'+idx);
-      var box=card.querySelector('#wiki-box-'+idx);
-      var loaded=false,open=false,fullText='',wikiTitle='';
-      // wiki-box内クリックがshrine-bodyに伝播しないよう全体に設定
-      box.addEventListener('click',function(e){e.stopPropagation();});
-      btn.addEventListener('click',function(e){
-        e.stopPropagation();
-        open=!open;
-        box.style.display=open?'block':'none';
-        btn.textContent=open?'📖 概要を閉じる ▲':'📖 概要を見る ▼';
-        if(open&&!loaded){
-          loaded=true;
-          box.innerHTML='<span style="color:#aaa;font-size:10px">読み込み中...</span>';
-          fetchWikiExcerpt(pname).then(function(result){
-            if(result){
-              fullText=result.text; wikiTitle=result.title;
-              renderWikiBox(0);
-            }else{
-              box.innerHTML='<span style="color:#aaa;font-size:10px">Wikipediaに掲載なし</span>';
-            }
-          });
-        }
-      });
-      function renderWikiBox(stage){
-        // stage: 0=冒頭80字, 1=200字, 2=Wikipedia
-        var wikiHref='https://ja.wikipedia.org/wiki/'+encodeURIComponent(wikiTitle);
-        if(stage===0){
-          var preview=fullText.substring(0,80);
-          box.innerHTML=preview+(fullText.length>80?'…':'')
-            +(fullText.length>80?' <button class="wiki-more-btn">概要を見る ▼</button>':' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>');
-          if(fullText.length>80)box.querySelector('.wiki-more-btn').addEventListener('click',function(e){e.stopPropagation();renderWikiBox(1);});
-        }else if(stage===1){
-          var mid=fullText.substring(0,200);
-          box.innerHTML=mid+(fullText.length>200?'…':'')
-            +(fullText.length>200?' <a href="'+wikiHref+'" target="_blank" class="wiki-link">もっと見る（Wikipedia）→</a>':' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>');
-        }
-      }
-      renderWikiBox._call=renderWikiBox; // expose for first call
-      // 初回表示時はstage 0
-      Object.defineProperty(btn,'_renderWiki',{value:function(){renderWikiBox(0);}});
-    })(i,p.name);
+    // wiki-box内クリック伝播防止
+    card.querySelector('#wiki-box-'+i).addEventListener('click',function(e){e.stopPropagation();});
 
     // カード本体クリック → 地図フォーカスのみ（GoogleMapは開かない）
     card.querySelector('.shrine-body').style.cursor='pointer';
@@ -902,6 +859,43 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
     });
     list.appendChild(card);
   });
+
+  // 全カードのWikipedia概要を順次取得（5件ずつ並列）
+  (function loadWiki(){
+    var queue=filtered.map(function(p,i){return{p:p,i:i};});
+    var running=0,qi=0;
+    function next(){
+      while(running<5&&qi<queue.length){
+        running++;
+        (function(p,i){
+          fetchWikiExcerpt(p.name).then(function(result){
+            running--;
+            if(result){
+              var box=document.getElementById('wiki-box-'+i);
+              if(!box)return;
+              var wikiHref='https://ja.wikipedia.org/wiki/'+encodeURIComponent(result.title);
+              var text=result.text;
+              box.style.display='block';
+              if(text.length<=80){
+                box.innerHTML=text+' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>';
+              }else{
+                box.innerHTML=text.substring(0,80)+'… <button class="wiki-more-btn">もっと見る ▼</button>';
+                box.querySelector('.wiki-more-btn').addEventListener('click',function(e){
+                  e.stopPropagation();
+                  var mid=text.substring(0,200);
+                  box.innerHTML=mid+(text.length>200?'… <a href="'+wikiHref+'" target="_blank" class="wiki-link">もっと見る（Wikipedia）→</a>':' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>');
+                  box.addEventListener('click',function(e){e.stopPropagation();});
+                });
+              }
+            }
+            next();
+          });
+        })(queue[qi].p,queue[qi].i);
+        qi++;
+      }
+    }
+    next();
+  })();
 }
 
 function quickAchieve(id){
