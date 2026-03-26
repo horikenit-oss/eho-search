@@ -103,6 +103,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .wiki-excerpt{font-size:11px;color:#555;line-height:1.7;margin-top:6px;padding:8px 10px;background:#fffbf3;border-left:2px solid var(--gold);border-radius:0 3px 3px 0;}
 .wiki-more-btn{font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:0;font-family:var(--sans);text-decoration:underline;white-space:nowrap}
 .wiki-link{color:var(--gold);font-size:10px;white-space:nowrap;text-decoration:underline}
+.grave-badge{display:inline-block;background:#fce4ec;color:#c62828;border:1px solid #ef9a9a;border-radius:10px;padding:1px 8px;font-size:9px;font-weight:700;letter-spacing:0.5px;vertical-align:middle;margin-left:4px}
 
 /* 手帳ボタン */
 .card-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
@@ -807,6 +808,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
     var typeLabel=p.type==='shrine'?'神社':'お寺';
     var typeClass=p.type==='shrine'?'tag-shrine':'tag-temple';
     var inariTag=p.isInari?'<span class="shrine-tag tag-inari">🦊 稲荷</span>':'';
+    var graveBadge='<span class="grave-badge" id="grave-badge-'+i+'"'+(p.nearCemetery?'':' style="display:none"')+'>⚠️ 墓地隣接</span>';
     var noteHtml=p.note?'<div class="shrine-note">'+p.note+'</div>':'';
     var mapUrl='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+p.addr);
     var saved=isSaved(p.id),achieved=isAchieved(p.id);
@@ -826,6 +828,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +    '<span class="shrine-tag '+typeClass+'">'+typeLabel+'</span>'
       +    '<span class="shrine-tag tag-angle">方角'+p.angle+'°（差'+diff+'°）</span>'
       +    inariTag
+      +    graveBadge
       +  '</div>'
       +  noteHtml
       +  '<div class="wiki-excerpt" id="wiki-box-'+i+'" style="display:none"></div>'
@@ -862,6 +865,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
 
   // 全カードのWikipedia概要を順次取得（5件ずつ並列）
   (function loadWiki(){
+    var GRAVE_KW=['墓','墓地','霊園','納骨','墓所','共同墓地'];
     var queue=filtered.map(function(p,i){return{p:p,i:i};});
     var running=0,qi=0;
     function next(){
@@ -870,13 +874,17 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
         (function(p,i){
           fetchWikiExcerpt(p.name).then(function(result){
             running--;
+            var box=document.getElementById('wiki-box-'+i);
+            if(!box){next();return;}
             box.style.display='block';
+            // ①Wikipedia墓地キーワードチェック
+            if(result&&result.text&&GRAVE_KW.some(function(k){return result.text.indexOf(k)>=0;})){
+              var gbadge=document.getElementById('grave-badge-'+i);
+              if(gbadge)gbadge.style.display='inline';
+            }
             if(result){
-              var box=document.getElementById('wiki-box-'+i);
-              if(!box)return;
               var wikiHref='https://ja.wikipedia.org/wiki/'+encodeURIComponent(result.title);
               var text=result.text;
-              box.style.display='block';
               if(text.length<=80){
                 box.innerHTML=text+' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>';
               }else{
@@ -1012,7 +1020,7 @@ async function fetchShrinesFromSupabase(lat,lng,radiusKm,ehoDeg,angleWidth){
     var dist=distKm(lat,lng,e.lat,e.lng);
     var angle=bearing(lat,lng,e.lat,e.lng);
     var diff=Math.abs(angle-ehoDeg);if(diff>180)diff=360-diff;
-    results.push({id:'sb_'+e.osm_id,name:name,type:e.type,dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,addr:'',note:'',lat:e.lat,lng:e.lng,_diff:diff});
+    results.push({id:'sb_'+e.osm_id,name:name,type:e.type,dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,nearCemetery:!!e.near_cemetery,addr:'',note:'',lat:e.lat,lng:e.lng,_diff:diff});
   });
   return results;
 }
