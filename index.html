@@ -102,7 +102,8 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .shrine-note{font-size:10px;color:var(--muted);margin-top:2px;font-style:italic}
 .wiki-toggle{font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px;font-family:var(--sans);text-decoration:underline;display:block}
 .wiki-excerpt{font-size:11px;color:#555;line-height:1.7;margin-top:6px;padding:8px 10px;background:#fffbf3;border-left:2px solid var(--gold);border-radius:0 3px 3px 0;display:none}
-.wiki-excerpt a{color:var(--gold);font-size:10px;}
+.wiki-more-btn{font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:0;font-family:var(--sans);text-decoration:underline;white-space:nowrap}
+.wiki-link{color:var(--gold);font-size:10px;white-space:nowrap;text-decoration:underline}
 
 /* 手帳ボタン */
 .card-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
@@ -769,41 +770,30 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
 var currentSearchResults=null,currentEhoDeg=165,currentAngleWidth=10;
 
 // =====================================================
-// Wikipedia概要取得（座標geosearch優先）
+// Wikipedia概要取得（名前一致のみ・誤情報防止）
 // =====================================================
 var wikiCache={};
-async function fetchWikiExcerpt(name,lat,lng){
-  var cacheKey=name+'|'+lat+'|'+lng;
-  if(wikiCache[cacheKey]!==undefined)return wikiCache[cacheKey];
+async function fetchWikiExcerpt(name){
+  if(wikiCache[name]!==undefined)return wikiCache[name];
   try{
     async function getExtract(title){
-      var r=await fetch('https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=6&titles='+encodeURIComponent(title)+'&format=json&origin=*&redirects=1');
+      var r=await fetch('https://ja.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&exsentences=8&titles='+encodeURIComponent(title)+'&format=json&origin=*&redirects=1');
       var d=await r.json();
       var pg=Object.values(d.query.pages)[0];
-      if(pg&&pg.extract&&!pg.missing){return{text:pg.extract.replace(/\n+/g,' ').trim(),title:pg.title};}
+      if(pg&&pg.extract&&!pg.missing&&pg.extract.length>20){return{text:pg.extract.replace(/\n+/g,' ').trim(),title:pg.title};}
       return null;
     }
-    // ①座標で近くのWikipediaページを検索（500m以内）
-    var gr=await fetch('https://ja.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+lat+'|'+lng+'&gsradius=500&gslimit=5&format=json&origin=*');
-    var gd=await gr.json();
-    var geo=(gd.query&&gd.query.geosearch)||[];
-    // 施設名と部分一致するものを優先
-    var match=geo.find(function(g){return g.title.indexOf(name)>=0||name.indexOf(g.title)>=0;});
-    if(!match&&geo.length)match=geo[0]; // 一致なければ最近傍
-    if(match){
-      var ex=await getExtract(match.title);
-      if(ex){wikiCache[cacheKey]=ex;return ex;}
+    // ①名前で直接検索
+    var ex=await getExtract(name);
+    if(ex){wikiCache[name]=ex;return ex;}
+    // ②「神社」「寺」「院」「堂」を除いた名前で検索
+    var shortName=name.replace(/(神社|寺院|寺|神宮|大社|稲荷|権現|院|堂|宮)$/,'');
+    if(shortName!==name&&shortName.length>=2){
+      var ex2=await getExtract(shortName);
+      if(ex2){wikiCache[name]=ex2;return ex2;}
     }
-    // ②名前で直接検索
-    var ex2=await getExtract(name);
-    if(ex2){wikiCache[cacheKey]=ex2;return ex2;}
-    // ③サーチAPIにフォールバック
-    var sr=await fetch('https://ja.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(name)+'&format=json&origin=*&srlimit=1&srnamespace=0');
-    var sd=await sr.json();
-    var hits=(sd.query&&sd.query.search)||[];
-    if(hits.length){var ex3=await getExtract(hits[0].title);if(ex3){wikiCache[cacheKey]=ex3;return ex3;}}
-    wikiCache[cacheKey]=null;return null;
-  }catch(e){wikiCache[cacheKey]=null;return null;}
+    wikiCache[name]=null;return null;
+  }catch(e){wikiCache[name]=null;return null;}
 }
 
 function renderSearchResults(filtered,ehoDeg,angleWidth){
@@ -849,14 +839,22 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +(saved&&!achieved
         ?'<button class="btn-save saved" onclick="void(0)">🔖 保存済</button>'
         :(!achieved?'<button class="btn-save" onclick="saveShrine(\''+p.id+'\')">🔖 行きたい</button>':''))
+      +'<button class="btn-save" id="map-btn-'+i+'" style="color:#1565c0;border-color:#bbdefb">🗺 地図</button>'
       +'</div>';
 
-    // Wikipedia概要トグル
-    (function(idx,pname,plat,plng){
+    // 地図ボタン
+    card.querySelector('#map-btn-'+i).addEventListener('click',function(e){
+      e.stopPropagation();
+      window.open(mapUrl,'_blank');
+    });
+
+    // Wikipedia概要トグル（クリック伝播なし）
+    (function(idx,pname){
       var btn=card.querySelector('#wiki-btn-'+idx);
       var box=card.querySelector('#wiki-box-'+idx);
-      var loaded=false,open=false,expanded=false,fullText='',wikiTitle='';
-      var SHORT=80;
+      var loaded=false,open=false,fullText='',wikiTitle='';
+      // wiki-box内クリックがshrine-bodyに伝播しないよう全体に設定
+      box.addEventListener('click',function(e){e.stopPropagation();});
       btn.addEventListener('click',function(e){
         e.stopPropagation();
         open=!open;
@@ -865,37 +863,42 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
         if(open&&!loaded){
           loaded=true;
           box.innerHTML='<span style="color:#aaa;font-size:10px">読み込み中...</span>';
-          fetchWikiExcerpt(pname,plat,plng).then(function(result){
+          fetchWikiExcerpt(pname).then(function(result){
             if(result){
               fullText=result.text; wikiTitle=result.title;
-              renderWikiBox(false);
+              renderWikiBox(0);
             }else{
-              box.innerHTML='<span style="color:#aaa;font-size:10px">Wikipediaに情報がありません</span>';
+              box.innerHTML='<span style="color:#aaa;font-size:10px">Wikipediaに掲載なし</span>';
             }
           });
         }
       });
-      function renderWikiBox(exp){
-        expanded=exp;
-        var short=fullText.substring(0,SHORT);
-        var hasMore=fullText.length>SHORT;
-        var wikiLink=' <a href="https://ja.wikipedia.org/wiki/'+encodeURIComponent(wikiTitle)+'" target="_blank" style="white-space:nowrap">Wikipedia →</a>';
-        if(!exp&&hasMore){
-          box.innerHTML=short+'… <button style="font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline" id="wiki-more-'+idx+'">もっと見る ▼</button>';
-          box.querySelector('#wiki-more-'+idx).addEventListener('click',function(e){e.stopPropagation();renderWikiBox(true);});
-        }else{
-          box.innerHTML=fullText+wikiLink;
+      function renderWikiBox(stage){
+        // stage: 0=冒頭80字, 1=200字, 2=Wikipedia
+        var wikiHref='https://ja.wikipedia.org/wiki/'+encodeURIComponent(wikiTitle);
+        if(stage===0){
+          var preview=fullText.substring(0,80);
+          box.innerHTML=preview+(fullText.length>80?'…':'')
+            +(fullText.length>80?' <button class="wiki-more-btn">概要を見る ▼</button>':' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>');
+          if(fullText.length>80)box.querySelector('.wiki-more-btn').addEventListener('click',function(e){e.stopPropagation();renderWikiBox(1);});
+        }else if(stage===1){
+          var mid=fullText.substring(0,200);
+          box.innerHTML=mid+(fullText.length>200?'…':'')
+            +(fullText.length>200?' <a href="'+wikiHref+'" target="_blank" class="wiki-link">もっと見る（Wikipedia）→</a>':' <a href="'+wikiHref+'" target="_blank" class="wiki-link">Wikipedia →</a>');
         }
       }
-    })(i,p.name,p.lat,p.lng);
+      renderWikiBox._call=renderWikiBox; // expose for first call
+      // 初回表示時はstage 0
+      Object.defineProperty(btn,'_renderWiki',{value:function(){renderWikiBox(0);}});
+    })(i,p.name);
 
+    // カード本体クリック → 地図フォーカスのみ（GoogleMapは開かない）
     card.querySelector('.shrine-body').style.cursor='pointer';
     card.querySelector('.shrine-body').addEventListener('click',function(){
-      var mkIdx=i+5+3; // fan+lines+circles+origin
+      var mkIdx=i+5+3;
       if(leafletMap&&mapLayers[mkIdx]){leafletMap.setView([p.lat,p.lng],13);mapLayers[mkIdx].openPopup();}
       document.querySelectorAll('.shrine-card').forEach(function(c){c.classList.remove('highlighted');});
       card.classList.add('highlighted');
-      window.open(mapUrl,'_blank');
     });
     list.appendChild(card);
   });
