@@ -747,7 +747,7 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
     var cls=achieved?'mk-achieved':(p.isInari?'mk-inari':(p.type==='shrine'?'mk-shrine':'mk-temple'));
     var iconHtml=achieved?'<div class="mk-achieved">★</div>':'<div class="'+cls+'">'+(i+1)+'</div>';
     var icon=L.divIcon({html:iconHtml,iconSize:[22,22],iconAnchor:[11,11],className:''});
-    var mapUrl='https://maps.google.com/?q='+p.lat+','+p.lng;
+    var mapUrl='https://maps.google.com/?q='+encodeURIComponent(p.name)+'&ll='+p.lat+','+p.lng;
     var typeLabel=p.type==='shrine'?'⛩ 神社':'🏯 お寺';
     var achievedLabel=achieved?'<br><span style="color:#2e7d32;font-size:11px">✅ 参拝済み</span>':'';
     var popup='<b>'+p.name+'</b>'+achievedLabel+'<br><span style="font-size:11px;color:#666">'+p.addr+'</span><br><span style="font-size:11px">'+typeLabel+' · '+p.dist.toFixed(1)+'km</span><br><a href="'+mapUrl+'" target="_blank" style="font-size:11px;color:#c8922a">🗺 Googleマップで開く →</a>';
@@ -810,7 +810,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
     var inariTag=p.isInari?'<span class="shrine-tag tag-inari">🦊 稲荷</span>':'';
     var graveBadge='<span class="grave-badge" id="grave-badge-'+i+'"'+(p.nearCemetery?'':' style="display:none"')+'>🪦 墓地隣接情報</span>';
     var noteHtml=p.note?'<div class="shrine-note">'+p.note+'</div>':'';
-    var mapUrl='https://maps.google.com/?q='+p.lat+','+p.lng;
+    var mapUrl='https://maps.google.com/?q='+encodeURIComponent(p.name)+'&ll='+p.lat+','+p.lng;
     var saved=isSaved(p.id),achieved=isAchieved(p.id);
     var diff=(p._diff!==undefined?p._diff:p.diff).toFixed(1);
 
@@ -840,14 +840,8 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +(saved&&!achieved
         ?'<button class="btn-save saved" onclick="void(0)">🔖 保存済</button>'
         :(!achieved?'<button class="btn-save" onclick="saveShrine(\''+p.id+'\')">🔖 行きたい</button>':''))
-      +'<button class="btn-save" id="map-btn-'+i+'" style="color:#1565c0;border-color:#bbdefb">🗺 地図</button>'
+      +'<a class="btn-save" href="'+mapUrl+'" target="_blank" rel="noopener noreferrer" style="color:#1565c0;border-color:#bbdefb;text-decoration:none" onclick="event.stopPropagation()">🗺 地図</a>'
       +'</div>';
-
-    // 地図ボタン
-    card.querySelector('#map-btn-'+i).addEventListener('click',function(e){
-      e.stopPropagation();
-      window.open(mapUrl,'_blank');
-    });
 
     // wiki-box内クリック伝播防止
     card.querySelector('#wiki-box-'+i).addEventListener('click',function(e){e.stopPropagation();});
