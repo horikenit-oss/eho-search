@@ -894,14 +894,22 @@ async function geocodeAddress(address){
 }
 
 // =====================================================
-// Overpass APIで神社・寺を取得
+// Supabaseで神社・寺を取得
 // =====================================================
-async function fetchShrinesFromOSM(lat,lng,radiusKm,ehoDeg,angleWidth){
-  var r=radiusKm*1000;
-  var query='[out:json][timeout:30];(node["amenity"="place_of_worship"]["religion"="shinto"](around:'+r+','+lat+','+lng+');node["amenity"="place_of_worship"]["religion"="buddhist"](around:'+r+','+lat+','+lng+');node["historic"="wayside_shrine"](around:'+r+','+lat+','+lng+'););out body;';
-  var res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(query)});
-  var data=await res.json();
-  var elements=data.elements||[];
+async function fetchShrinesFromSupabase(lat,lng,radiusKm,ehoDeg,angleWidth){
+  var SUPABASE_URL='https://uyrsckzumnctuhiowfhj.supabase.co';
+  var SUPABASE_KEY='sb_publishable_Xpsg9Y7G-7A3m_v_REJblw_tKpuuTxu';
+
+  var latDelta=radiusKm/111;
+  var lngDelta=radiusKm/(111*Math.cos(lat*Math.PI/180));
+  var url=SUPABASE_URL+'/rest/v1/shrines?select=osm_id,name,type,lat,lng'
+    +'&lat=gte.'+(lat-latDelta)+'&lat=lte.'+(lat+latDelta)
+    +'&lng=gte.'+(lng-lngDelta)+'&lng=lte.'+(lng+lngDelta)
+    +'&limit=2000';
+
+  var res=await fetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+  if(!res.ok)throw new Error('Supabase error: '+res.status);
+  var elements=await res.json();
 
   function bearing(lat1,lng1,lat2,lng2){
     var dL=(lng2-lng1)*Math.PI/180;
@@ -918,17 +926,13 @@ async function fetchShrinesFromOSM(lat,lng,radiusKm,ehoDeg,angleWidth){
   var inariWords=['稲荷','いなり','イナリ','Inari','inari'];
   var results=[];
   elements.forEach(function(e){
-    if(!e.lat||!e.lon)return;
-    var name=e.tags&&(e.tags.name||e.tags['name:ja'])||'（名称不明）';
-    var religion=e.tags&&e.tags.religion||'';
-    var isShrine=religion==='shinto'||e.tags&&e.tags.historic==='wayside_shrine';
-    var isTemple=religion==='buddhist';
+    if(!e.lat||!e.lng)return;
+    var name=e.name||'（名称不明）';
     var isInari=inariWords.some(function(w){return name.indexOf(w)>=0;});
-    var dist=distKm(lat,lng,e.lat,e.lon);
-    var angle=bearing(lat,lng,e.lat,e.lon);
+    var dist=distKm(lat,lng,e.lat,e.lng);
+    var angle=bearing(lat,lng,e.lat,e.lng);
     var diff=Math.abs(angle-ehoDeg);if(diff>180)diff=360-diff;
-    var id='osm_'+e.id;
-    results.push({id:id,name:name,type:isShrine?'shrine':'temple',dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,addr:'',note:'',lat:e.lat,lng:e.lon,_diff:diff});
+    results.push({id:'sb_'+e.osm_id,name:name,type:e.type,dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,addr:'',note:'',lat:e.lat,lng:e.lng,_diff:diff});
   });
   return results;
 }
@@ -951,9 +955,9 @@ async function doSearch(){
     var coords=await geocodeAddress(address);
     ORIGIN_LAT=coords.lat;ORIGIN_LNG=coords.lng;
 
-    // Overpass APIで神社・寺取得
+    // Supabaseで神社・寺取得
     document.getElementById('loadingMsg').textContent='神社・お寺を検索中...';
-    var allPlaces=await fetchShrinesFromOSM(ORIGIN_LAT,ORIGIN_LNG,maxDist,ehoDeg,angleWidth);
+    var allPlaces=await fetchShrinesFromSupabase(ORIGIN_LAT,ORIGIN_LNG,maxDist,ehoDeg,angleWidth);
 
     // フィルタリング
     var filtered=allPlaces.filter(function(p){
@@ -967,7 +971,7 @@ async function doSearch(){
 
     loading.classList.remove('show');
     btn.disabled=false;btn.textContent='⛩ 恵方の神社・お寺を探す';
-    document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（OpenStreetMapデータ）';
+    document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（DBデータ）';
     results.classList.add('show');
     setTimeout(function(){buildMap(filtered,ehoDeg,angleWidth,maxDist);},150);
     renderSearchResults(filtered,ehoDeg,angleWidth);
