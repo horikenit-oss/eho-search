@@ -733,6 +733,8 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
   [10,30,60].forEach(function(km){
     if(km<=lineKm)mapLayers.push(L.circle([ORIGIN_LAT,ORIGIN_LNG],{radius:km*1000,color:'#aaa',weight:0.8,opacity:0.25,fill:false,dashArray:'3,6'}).addTo(leafletMap));
   });
+  // 750m除外ゾーン（九星気学ルール）
+  mapLayers.push(L.circle([ORIGIN_LAT,ORIGIN_LNG],{radius:750,color:'#888',weight:1.5,opacity:0.6,fillColor:'#888',fillOpacity:0.12,dashArray:'4,4'}).addTo(leafletMap).bindTooltip('750m以内は除外（九星気学ルール）',{permanent:false}));
   var originIcon=L.divIcon({html:'<div class="mk-origin">★</div>',iconSize:[28,28],iconAnchor:[14,14],className:''});
   mapLayers.push(L.marker([ORIGIN_LAT,ORIGIN_LNG],{icon:originIcon}).bindPopup('<b>出発地</b>').addTo(leafletMap));
 
@@ -958,6 +960,7 @@ async function doSearch(){
 
     // フィルタリング
     var filtered=allPlaces.filter(function(p){
+      if(p.dist<0.75)return false; // 750m未満除外（九星気学ルール）
       if(p.dist>maxDist)return false;
       if(p._diff>angleWidth)return false;
       if(!filterState.inari&&p.isInari)return false;
