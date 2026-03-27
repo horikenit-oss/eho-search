@@ -464,7 +464,7 @@ function onRyuhaChange(){
 }
 document.getElementById('distRange').addEventListener('input',function(){document.getElementById('distVal').textContent=this.value+'km';});
 document.getElementById('widthRange').addEventListener('input',function(){document.getElementById('widthVal').textContent='±'+this.value+'°';});
-function toggleChip(chipId,key){filterState[key]=!filterState[key];document.getElementById(chipId).classList.toggle('active',filterState[key]);}
+function toggleChip(chipId,key){filterState[key]=!filterState[key];document.getElementById(chipId).classList.toggle('active',filterState[key]);applyFilters();}
 
 // =====================================================
 // サンプルデータ（扇形に散らばった配置）
@@ -769,7 +769,23 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
 // =====================================================
 // 検索結果レンダリング
 // =====================================================
-var currentSearchResults=null,currentEhoDeg=165,currentAngleWidth=10;
+var currentSearchResults=null,currentAllResults=null,currentEhoDeg=165,currentAngleWidth=10,currentMaxDist=50;
+
+function applyFilters(){
+  if(!currentAllResults)return;
+  var filtered=currentAllResults.filter(function(p){
+    if(!filterState.inc750&&p.dist<0.75)return false;
+    if(p.dist>currentMaxDist)return false;
+    if(p._diff>currentAngleWidth)return false;
+    if(!filterState.inari&&p.isInari)return false;
+    if(p.type==='shrine'&&!filterState.shrine)return false;
+    if(p.type==='temple'&&!filterState.temple)return false;
+    if(filterState.exCemetery&&p.nearCemetery)return false;
+    return true;
+  }).sort(function(a,b){return a.dist-b.dist;}).slice(0,200);
+  document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（DBデータ）';
+  renderSearchResults(filtered,currentEhoDeg,currentAngleWidth);
+}
 
 // =====================================================
 // Wikipedia概要取得（名前一致のみ・誤情報防止）
@@ -1046,24 +1062,16 @@ async function doSearch(){
     document.getElementById('loadingMsg').textContent='神社・お寺を検索中...';
     var allPlaces=await fetchShrinesFromSupabase(ORIGIN_LAT,ORIGIN_LNG,maxDist,ehoDeg,angleWidth);
 
-    // フィルタリング
-    var filtered=allPlaces.filter(function(p){
-      if(!filterState.inc750&&p.dist<0.75)return false; // 750m未満除外（九星気学ルール）
-      if(p.dist>maxDist)return false;
-      if(p._diff>angleWidth)return false;
-      if(!filterState.inari&&p.isInari)return false;
-      if(p.type==='shrine'&&!filterState.shrine)return false;
-      if(p.type==='temple'&&!filterState.temple)return false;
-      if(filterState.exCemetery&&p.nearCemetery)return false;
-      return true;
-    }).sort(function(a,b){return a.dist-b.dist;}).slice(0,200);
+    // 生データを保存してフィルター関数で処理
+    currentAllResults=allPlaces;
+    currentEhoDeg=ehoDeg;currentAngleWidth=angleWidth;currentMaxDist=maxDist;
 
     loading.classList.remove('show');
     btn.disabled=false;btn.textContent='⛩ 恵方の神社・お寺を探す';
-    document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（DBデータ）';
     results.classList.add('show');
+    applyFilters();
+    var filtered=currentSearchResults||[];
     setTimeout(function(){buildMap(filtered,ehoDeg,angleWidth,maxDist);},150);
-    renderSearchResults(filtered,ehoDeg,angleWidth);
     results.scrollIntoView({behavior:'smooth',block:'start'});
 
   }catch(err){
