@@ -785,6 +785,7 @@ function applyFilters(){
   }).sort(function(a,b){return a.dist-b.dist;}).slice(0,200);
   document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（DBデータ）';
   renderSearchResults(filtered,currentEhoDeg,currentAngleWidth);
+  buildMap(filtered,currentEhoDeg,currentAngleWidth,currentMaxDist);
 }
 
 // =====================================================
