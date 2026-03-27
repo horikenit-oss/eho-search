@@ -747,7 +747,7 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
     var cls=achieved?'mk-achieved':(p.isInari?'mk-inari':(p.type==='shrine'?'mk-shrine':'mk-temple'));
     var iconHtml=achieved?'<div class="mk-achieved">★</div>':'<div class="'+cls+'">'+(i+1)+'</div>';
     var icon=L.divIcon({html:iconHtml,iconSize:[22,22],iconAnchor:[11,11],className:''});
-    var mapUrl='https://www.google.com/maps/place/'+encodeURIComponent(p.name)+'/@'+p.lat+','+p.lng+',17z';
+    var mapUrl='https://www.google.com/maps/search/'+encodeURIComponent(p.name||p.lat+','+p.lng)+'/@'+p.lat+','+p.lng+',17z';
     var typeLabel=p.type==='shrine'?'⛩ 神社':'🏯 お寺';
     var achievedLabel=achieved?'<br><span style="color:#2e7d32;font-size:11px">✅ 参拝済み</span>':'';
     var popup='<b>'+p.name+'</b>'+achievedLabel+'<br><span style="font-size:11px;color:#666">'+p.addr+'</span><br><span style="font-size:11px">'+typeLabel+' · '+p.dist.toFixed(1)+'km</span><br><a href="'+mapUrl+'" target="_blank" style="font-size:11px;color:#c8922a">🗺 Googleマップで開く →</a>';
@@ -811,7 +811,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
     var graveBadge='<span class="grave-badge" id="grave-badge-'+i+'"'+(p.nearCemetery?'':' style="display:none"')+'>🪦 墓地隣接情報</span>';
     var parkingBadge=p.nearParking?'<span class="shrine-tag" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">🅿️ 駐車場あり</span>':'';
     var noteHtml=p.note?'<div class="shrine-note">'+p.note+'</div>':'';
-    var mapUrl='https://www.google.com/maps/place/'+encodeURIComponent(p.name)+'/@'+p.lat+','+p.lng+',17z';
+    var mapUrl='https://www.google.com/maps/search/'+encodeURIComponent(p.name||p.lat+','+p.lng)+'/@'+p.lat+','+p.lng+',17z';
     var saved=isSaved(p.id),achieved=isAchieved(p.id);
     var diff=(p._diff!==undefined?p._diff:p.diff).toFixed(1);
 
