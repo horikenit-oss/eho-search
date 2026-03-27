@@ -405,7 +405,7 @@ var techouData = loadTechou();
 
 var filterState={shrine:true,temple:true,inari:false,exCemetery:false,inc750:false};
 var currentFilter='all';
-var leafletMap=null, mapLayers=[];
+var leafletMap=null, mapLayers=[], markerLayers=[];
 var currentModal=null; // 現在モーダルで編集中のID
 var pendingPhotos=[]; // モーダルの仮写真データ
 
@@ -744,6 +744,16 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
   var originIcon=L.divIcon({html:'<div class="mk-origin">★</div>',iconSize:[28,28],iconAnchor:[14,14],className:''});
   mapLayers.push(L.marker([ORIGIN_LAT,ORIGIN_LNG],{icon:originIcon}).bindPopup('<b>出発地</b>').addTo(leafletMap));
 
+  rebuildMarkers(places);
+  var coords=[[ORIGIN_LAT,ORIGIN_LNG]].concat(places.map(function(p){return[p.lat,p.lng];}));
+  if(coords.length>1)leafletMap.fitBounds(coords,{padding:[30,30]});
+  setTimeout(function(){leafletMap.invalidateSize();},200);
+}
+
+function rebuildMarkers(places){
+  if(!leafletMap)return;
+  markerLayers.forEach(function(l){leafletMap.removeLayer(l);});
+  markerLayers=[];
   places.forEach(function(p,i){
     var achieved=isAchieved(p.id);
     var cls=achieved?'mk-achieved':(p.isInari?'mk-inari':(p.type==='shrine'?'mk-shrine':'mk-temple'));
@@ -759,11 +769,8 @@ function buildMap(places,ehoDeg,angleWidth,maxDist){
       var card=document.getElementById('card-'+i);
       if(card){card.classList.add('highlighted');card.scrollIntoView({behavior:'smooth',block:'nearest'});}
     });
-    mapLayers.push(mk);
+    markerLayers.push(mk);
   });
-  var coords=[[ORIGIN_LAT,ORIGIN_LNG]].concat(places.map(function(p){return[p.lat,p.lng];}));
-  if(coords.length>1)leafletMap.fitBounds(coords,{padding:[30,30]});
-  setTimeout(function(){leafletMap.invalidateSize();},200);
 }
 
 // =====================================================
@@ -785,7 +792,7 @@ function applyFilters(){
   }).sort(function(a,b){return a.dist-b.dist;}).slice(0,200);
   document.getElementById('resultsCount').textContent=filtered.length+'件見つかりました（DBデータ）';
   renderSearchResults(filtered,currentEhoDeg,currentAngleWidth);
-  buildMap(filtered,currentEhoDeg,currentAngleWidth,currentMaxDist);
+  rebuildMarkers(filtered);
 }
 
 // =====================================================
@@ -871,8 +878,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
     // カード本体クリック → 地図フォーカスのみ（GoogleMapは開かない）
     card.querySelector('.shrine-body').style.cursor='pointer';
     card.querySelector('.shrine-body').addEventListener('click',function(){
-      var mkIdx=i+5+3;
-      if(leafletMap&&mapLayers[mkIdx]){leafletMap.setView([p.lat,p.lng],13);mapLayers[mkIdx].openPopup();}
+      if(leafletMap&&markerLayers[i]){leafletMap.setView([p.lat,p.lng],13);markerLayers[i].openPopup();}
       document.querySelectorAll('.shrine-card').forEach(function(c){c.classList.remove('highlighted');});
       card.classList.add('highlighted');
     });
