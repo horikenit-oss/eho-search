@@ -284,6 +284,8 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
           <div class="filter-chip active" id="chip-shrine" onclick="toggleChip('chip-shrine','shrine')">⛩ 神社</div>
           <div class="filter-chip active" id="chip-temple" onclick="toggleChip('chip-temple','temple')">🏯 お寺</div>
           <div class="filter-chip" id="chip-inari" onclick="toggleChip('chip-inari','inari')">🦊 稲荷を含む</div>
+          <div class="filter-chip" id="chip-exCemetery" onclick="toggleChip('chip-exCemetery','exCemetery')">🪦 墓地隣接を除く</div>
+          <div class="filter-chip" id="chip-inc750" onclick="toggleChip('chip-inc750','inc750')">📍 750m以内を含める</div>
         </div>
       </div>
     </div>
@@ -401,7 +403,7 @@ function loadTechou(){try{return JSON.parse(localStorage.getItem('eho_techou')||
 function saveTechouData(data){try{localStorage.setItem('eho_techou',JSON.stringify(data));}catch(e){}}
 var techouData = loadTechou();
 
-var filterState={shrine:true,temple:true,inari:false};
+var filterState={shrine:true,temple:true,inari:false,exCemetery:false,inc750:false};
 var currentFilter='all';
 var leafletMap=null, mapLayers=[];
 var currentModal=null; // 現在モーダルで編集中のID
@@ -1046,12 +1048,13 @@ async function doSearch(){
 
     // フィルタリング
     var filtered=allPlaces.filter(function(p){
-      if(p.dist<0.75)return false; // 750m未満除外（九星気学ルール）
+      if(!filterState.inc750&&p.dist<0.75)return false; // 750m未満除外（九星気学ルール）
       if(p.dist>maxDist)return false;
       if(p._diff>angleWidth)return false;
       if(!filterState.inari&&p.isInari)return false;
       if(p.type==='shrine'&&!filterState.shrine)return false;
       if(p.type==='temple'&&!filterState.temple)return false;
+      if(filterState.exCemetery&&p.nearCemetery)return false;
       return true;
     }).sort(function(a,b){return a.dist-b.dist;}).slice(0,200);
 
