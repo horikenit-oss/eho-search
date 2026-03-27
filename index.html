@@ -809,6 +809,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
     var typeClass=p.type==='shrine'?'tag-shrine':'tag-temple';
     var inariTag=p.isInari?'<span class="shrine-tag tag-inari">🦊 稲荷</span>':'';
     var graveBadge='<span class="grave-badge" id="grave-badge-'+i+'"'+(p.nearCemetery?'':' style="display:none"')+'>🪦 墓地隣接情報</span>';
+    var parkingBadge=p.nearParking?'<span class="shrine-tag" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9">🅿️ 駐車場あり</span>':'';
     var noteHtml=p.note?'<div class="shrine-note">'+p.note+'</div>':'';
     var mapUrl='https://maps.google.com/?q='+encodeURIComponent(p.name)+'&ll='+p.lat+','+p.lng;
     var saved=isSaved(p.id),achieved=isAchieved(p.id);
@@ -829,6 +830,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
       +    '<span class="shrine-tag tag-angle">方角'+p.angle+'°（差'+diff+'°）</span>'
       +    inariTag
       +    graveBadge
+      +    parkingBadge
       +  '</div>'
       +  noteHtml
       +  '<div class="wiki-excerpt" id="wiki-box-'+i+'" style="display:none"></div>'
@@ -841,6 +843,7 @@ function renderSearchResults(filtered,ehoDeg,angleWidth){
         ?'<button class="btn-save saved" onclick="void(0)">🔖 保存済</button>'
         :(!achieved?'<button class="btn-save" onclick="saveShrine(\''+p.id+'\')">🔖 行きたい</button>':''))
       +'<a class="btn-save" href="'+mapUrl+'" target="_blank" rel="noopener noreferrer" style="color:#1565c0;border-color:#bbdefb;text-decoration:none" onclick="event.stopPropagation()">🗺 地図</a>'
+      +(p.website?'<a class="btn-save" href="'+p.website+'" target="_blank" rel="noopener noreferrer" style="color:#2e7d32;border-color:#a5d6a7;text-decoration:none" onclick="event.stopPropagation()">🌐 公式</a>':'')
       +'</div>';
 
     // wiki-box内クリック伝播防止
@@ -1014,7 +1017,7 @@ async function fetchShrinesFromSupabase(lat,lng,radiusKm,ehoDeg,angleWidth){
     var dist=distKm(lat,lng,e.lat,e.lng);
     var angle=bearing(lat,lng,e.lat,e.lng);
     var diff=Math.abs(angle-ehoDeg);if(diff>180)diff=360-diff;
-    results.push({id:'sb_'+e.osm_id,name:name,type:e.type,dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,nearCemetery:!!e.near_cemetery,addr:'',note:'',lat:e.lat,lng:e.lng,_diff:diff});
+    results.push({id:'sb_'+e.osm_id,name:name,type:e.type,dist:dist,angle:parseFloat(angle.toFixed(1)),diff:parseFloat(diff.toFixed(1)),isInari:isInari,nearCemetery:!!e.near_cemetery,nearParking:!!e.near_parking,website:e.website||null,addr:'',note:'',lat:e.lat,lng:e.lng,_diff:diff});
   });
   return results;
 }
